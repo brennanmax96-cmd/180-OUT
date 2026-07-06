@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>180-OUT — A geographical challenge for the geographically challenged</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css">
+<script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+<style>
+  :root{
+    --cream:#f6efdd;
+    --cream-2:#ecdfc0;
+    --navy:#1f3a5f;
+    --navy-dark:#14263e;
+    --sky:#5c8fc2;
+    --sky-dark:#3d6a99;
+    --ink:#182636;
+    --paper:#fffaf0;
+    --muted:#7d8b99;
+    --gold:#d9a441;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;background:var(--navy-dark);overflow:hidden;font-family:'JetBrains Mono',monospace;}
+  #app{position:relative;width:100vw;height:100vh;height:100dvh;overflow:hidden;background:var(--navy-dark);}
+
+  #map{position:absolute;inset:0;background:#94a878;}
+  .maplibregl-ctrl-attrib{background:rgba(31,58,95,0.75)!important;color:var(--cream)!important;font-size:9px!important;}
+  .maplibregl-ctrl-attrib a{color:var(--cream)!important;}
+  .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left{z-index:800;}
+
+  .map-pin{width:18px;height:18px;border-radius:50%;border:2.5px solid var(--cream);box-shadow:0 2px 6px rgba(0,0,0,0.4);}
+  .map-pin.actual{width:22px;height:22px;background:var(--gold);border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.5);}
+
+  .topbar{
+    position:absolute;top:0;left:0;right:0;padding:18px 18px 22px;z-index:900;pointer-events:none;
+    background:linear-gradient(to bottom, rgba(20,38,62,0.78) 0%, rgba(20,38,62,0.55) 55%, rgba(20,38,62,0) 100%);
+  }
+  .brand{display:flex;align-items:baseline;gap:10px;pointer-events:none;}
+  .brand h1{font-family:'Fraunces',serif;font-weight:700;font-size:26px;color:var(--cream);margin:0;letter-spacing:0.5px;text-shadow:0 2px 3px rgba(0,0,0,0.35);}
+  .brand span{font-size:11px;color:var(--cream-2);letter-spacing:1.5px;text-transform:uppercase;}
+  .tagline{margin-top:4px;font-size:12px;font-style:italic;color:var(--cream-2);opacity:0.9;}
+  .prompt-display{margin-top:6px;font-size:13px;color:var(--cream);pointer-events:none;}
+  .prompt-display b{color:var(--gold);}
+
+  .panel{
+    background:var(--cream);
+    border:2px solid var(--navy);
+    border-radius:14px;
+    padding:16px;
+    pointer-events:auto;
+    box-shadow:0 10px 26px rgba(0,0,0,0.4);
+  }
+
+  .center-panel{position:absolute;left:16px;right:16px;top:104px;z-index:900;max-width:460px;margin:0 auto;max-height:70vh;overflow-y:auto;}
+  .center-panel label{display:block;font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:var(--navy);font-weight:700;margin-bottom:8px;}
+  .search-row{display:flex;gap:8px;}
+  .search-row input{
+    flex:1;background:var(--paper);border:1.5px solid var(--navy);border-radius:9px;
+    color:var(--ink);padding:11px 12px;font-family:'JetBrains Mono',monospace;font-size:14px;
+  }
+  .search-row input:focus{outline:none;border-color:var(--sky);}
+  .btn{
+    background:var(--navy);color:var(--cream);border:1.5px solid var(--navy-dark);border-radius:9px;padding:11px 16px;
+    font-family:'JetBrains Mono',monospace;font-weight:700;font-size:13px;letter-spacing:0.3px;cursor:pointer;
+    transition:transform 0.1s, filter 0.15s;
+  }
+  .btn:active{transform:scale(0.97);}
+  .btn:disabled{opacity:0.4;cursor:not-allowed;}
+  .btn.ghost{background:transparent;border:1.5px solid var(--navy);color:var(--navy);}
+  .btn.full{width:100%;}
+  .btn.small{padding:6px 10px;font-size:11px;border-radius:7px;}
+
+  .results{margin-top:10px;max-height:32vh;overflow-y:auto;}
+  .result-item{
+    padding:10px 10px;border-radius:8px;color:var(--ink);font-size:13px;line-height:1.4;
+    cursor:pointer;border:1px solid transparent;
+  }
+  .result-item:hover{background:rgba(92,143,194,0.18);border-color:var(--sky);}
+  .result-kind{color:var(--sky-dark);font-size:10.5px;text-transform:uppercase;letter-spacing:1px;font-weight:700;display:block;margin-bottom:2px;}
+  .hint{color:var(--muted);font-size:11.5px;margin-top:10px;line-height:1.5;}
+  .status-msg{color:var(--muted);font-size:12.5px;margin-top:8px;}
+  .status-msg.error{color:var(--sky-dark);}
+
+  .guesser-list{margin-top:10px;display:flex;flex-direction:column;gap:6px;}
+  .guesser-chip{display:flex;align-items:center;gap:10px;background:var(--paper);border:1.5px solid var(--navy);border-radius:9px;padding:8px 10px;}
+  .guesser-chip .dot{width:12px;height:12px;border-radius:50%;flex:0 0 auto;}
+  .guesser-chip .name{flex:1;font-size:13px;color:var(--ink);font-weight:600;}
+  .guesser-chip .order{font-size:11px;color:var(--muted);}
+  .guesser-chip .remove{background:none;border:none;color:var(--sky-dark);font-weight:700;cursor:pointer;font-size:14px;padding:2px 6px;}
+  .players-line{margin-top:10px;font-size:12px;color:var(--muted);}
+  .players-line button{background:none;border:none;color:var(--sky-dark);font-weight:700;text-decoration:underline;cursor:pointer;font-family:inherit;font-size:inherit;padding:0;}
+
+  .instruction{
+    position:absolute;top:104px;left:50%;transform:translateX(-50%);z-index:900;
+    padding:10px 18px;border-radius:999px;pointer-events:none;max-width:88vw;
+  }
+  .instruction span.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--navy);margin-right:8px;
+    animation:pulse 1.4s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.25;}}
+  .instruction p{margin:0;color:var(--ink);font-size:13px;font-weight:600;text-align:center;}
+
+  .bottombar{position:absolute;left:16px;right:16px;bottom:18px;z-index:900;display:flex;justify-content:center;}
+  .lockin{max-width:420px;width:100%;display:flex;gap:10px;}
+
+  .reveal-card{position:absolute;left:16px;right:16px;bottom:18px;z-index:950;max-width:460px;margin:0 auto;max-height:70vh;overflow-y:auto;}
+  .reveal-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;}
+  .reveal-head h2{margin:0;font-family:'Fraunces',serif;font-weight:700;font-size:18px;color:var(--ink);}
+  .actual-label{font-size:12px;color:var(--muted);margin-bottom:10px;}
+  .actual-label b{color:var(--sky-dark);font-weight:700;}
+  .leaderboard{display:flex;flex-direction:column;gap:8px;}
+  .lb-row{display:flex;align-items:center;gap:10px;background:var(--paper);border:1.5px solid var(--navy);border-radius:9px;padding:9px 11px;}
+  .lb-row.first{background:var(--gold);border-color:var(--navy-dark);}
+  .lb-rank{font-family:'Fraunces',serif;font-weight:700;font-size:15px;color:var(--navy);width:22px;flex:0 0 auto;}
+  .lb-dot{width:13px;height:13px;border-radius:50%;flex:0 0 auto;border:1.5px solid var(--cream);}
+  .lb-name{flex:1;font-size:13px;font-weight:700;color:var(--ink);}
+  .lb-dist{font-size:13px;color:var(--ink);font-weight:600;}
+  .reveal-actions{margin-top:14px;display:flex;gap:10px;}
+
+  ::-webkit-scrollbar{width:6px;}
+  ::-webkit-scrollbar-thumb{background:var(--navy);border-radius:6px;}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="map"></div>
+
+  <div class="topbar">
+    <div class="brand"><h1>180-OUT</h1><span id="mode-tag"></span></div>
+    <div class="tagline">A geographical challenge for the geographically challenged</div>
+    <div class="prompt-display" id="prompt-display" style="display:none;"></div>
+  </div>
+
+  <div class="panel center-panel" id="prompt-panel">
+    <label for="prompt-input">What should guessers try to find? (a text hint — not the real address)</label>
+    <div class="search-row">
+      <input id="prompt-input" type="text" placeholder="e.g. My hometown, or Where we went on vacation" autocomplete="off">
+    </div>
+    <button class="btn ghost full" id="prompt-random-btn" style="margin-top:10px;">🎲 Pick a random location for me</button>
+    <div class="hint">Guessers will see this exact text while they guess, but the real place stays hidden until everyone's placed a pin.</div>
+    <button class="btn full" id="prompt-continue-btn" style="margin-top:14px;" disabled>Continue</button>
+  </div>
+
+  <div class="panel center-panel" id="roster-panel" style="display:none;">
+    <label for="guesser-name-input">Add each guesser's name, in turn order</label>
+    <div class="search-row">
+      <input id="guesser-name-input" type="text" placeholder="e.g. Jordan" autocomplete="off">
+      <button class="btn" id="add-guesser-btn">Add</button>
+    </div>
+    <div class="guesser-list" id="guesser-list"></div>
+    <div class="hint" id="roster-hint">Add at least 1 guesser to continue. Pins get dropped in the order added.</div>
+    <button class="btn full" id="start-round-btn" style="margin-top:14px;" disabled>Continue to guessing</button>
+  </div>
+
+  <div class="panel center-panel" id="setup-panel" style="display:none;">
+    <label for="loc-input">Everyone's guessed — now enter the real address, city, landmark, or road</label>
+    <div class="search-row">
+      <input id="loc-input" type="text" placeholder="e.g. Eiffel Tower, or 221B Baker St, London" autocomplete="off">
+      <button class="btn" id="search-btn">Find</button>
+    </div>
+    <div class="status-msg" id="setup-status"></div>
+    <div class="results" id="results"></div>
+    <div class="hint">Picking a result here reveals the results immediately.</div>
+  </div>
+
+  <div class="panel instruction" id="instruction" style="display:none;">
+    <p id="instruction-text"><span class="dot"></span>Tap to drop your pin</p>
+  </div>
+  <div class="bottombar" id="bottombar" style="display:none;">
+    <div class="lockin">
+      <button class="btn ghost" id="clear-pin-btn" style="flex:0 0 auto;">Clear pin</button>
+      <button class="btn full" id="lock-btn" disabled>Confirm guess</button>
+    </div>
+  </div>
+
+  <div class="panel reveal-card" id="reveal-card" style="display:none;">
+    <div class="reveal-head">
+      <h2>Results</h2>
+      <button class="btn ghost small" id="km-mi-btn">km</button>
+    </div>
+    <div class="actual-label">Actual location: <b id="actual-name">—</b></div>
+    <div class="leaderboard" id="leaderboard"></div>
+    <div class="reveal-actions">
+      <button class="btn ghost" id="new-players-btn">New players</button>
+      <button class="btn full" id="again-btn">New round</button>
+    </div>
+  </div>
+
+  <div class="panel" id="error-banner" style="display:none;position:absolute;left:16px;right:16px;bottom:18px;z-index:960;max-width:460px;margin:0 auto;border-color:#3d6a99;">
+    <div style="color:#3d6a99;font-size:13px;" id="error-banner-text"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  try {
+  if (typeof maplibregl === 'undefined') {
+    document.getElementById('app').innerHTML =
+      '<div style="padding:28px;color:#182636;background:#f6efdd;font-family:monospace;line-height:1.6;max-width:480px;">' +
+      '<h2 style="color:#3d6a99;">Map library failed to load</h2>' +
+      '<p>This page loads MapLibre GL from an external CDN. If you\'re viewing this inside a sandboxed preview panel, that panel likely blocks external scripts or network access.</p>' +
+      '<p><b>Fix:</b> open this file directly in Safari or Chrome as a real tab/page.</p>' +
+      '</div>';
+    return;
+  }
+
+  function showError(msg){
+    const banner = document.getElementById('error-banner');
+    document.getElementById('error-banner-text').textContent = msg;
+    banner.style.display = 'block';
+  }
+  window.addEventListener('error', (e) => {
+    showError('Something failed to load or run: ' + (e.message || 'unknown error'));
+  });
+
+  const customStyle = {
+    version: 8,
+    sources: {
+      omt: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' }
+    },
+    glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
+    sprite: '',
+    layers: [
+      { id: 'background', type: 'background', paint: { 'background-color': '#94a878' } },
+      { id: 'landcover', type: 'fill', source: 'omt', 'source-layer': 'landcover',
+        paint: { 'fill-color': '#9cb583', 'fill-opacity': 0.6 } },
+      { id: 'landuse', type: 'fill', source: 'omt', 'source-layer': 'landuse',
+        paint: { 'fill-color': '#a8bd8f', 'fill-opacity': 0.5 } },
+      { id: 'water', type: 'fill', source: 'omt', 'source-layer': 'water',
+        paint: { 'fill-color': '#1d4e6b' } },
+      { id: 'waterway', type: 'line', source: 'omt', 'source-layer': 'waterway',
+        paint: { 'line-color': '#1d4e6b', 'line-width': 1.4 } },
+      { id: 'building', type: 'fill', source: 'omt', 'source-layer': 'building', minzoom: 13,
+        paint: { 'fill-color': '#dcc9a3', 'fill-opacity': 0.7 } },
+      { id: 'roads', type: 'line', source: 'omt', 'source-layer': 'transportation',
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: {
+          'line-color': '#cfcfcf',
+          'line-width': [
+            'interpolate', ['linear'], ['zoom'],
+            5, ['match', ['get','class'], ['motorway','trunk'], 1, 0.3],
+            12, ['match', ['get','class'], ['motorway','trunk'], 3, ['primary','secondary'], 2, 1],
+            18, ['match', ['get','class'], ['motorway','trunk'], 10, ['primary','secondary'], 7, 4]
+          ]
+        } },
+      { id: 'boundary-state', type: 'line', source: 'omt', 'source-layer': 'boundary',
+        filter: ['all', ['>', ['get','admin_level'], 2], ['<=', ['get','admin_level'], 4]],
+        paint: { 'line-color': '#1a1410', 'line-width': 0.8, 'line-dasharray': [3,2] } },
+      { id: 'boundary-country', type: 'line', source: 'omt', 'source-layer': 'boundary',
+        filter: ['<=', ['get','admin_level'], 2],
+        paint: { 'line-color': '#1a1410', 'line-width': 1.6 } }
+    ]
+  };
+
+  const map = new maplibregl.Map({
+    container: 'map',
+    style: customStyle,
+    center: [0, 20],
+    zoom: 1,
+    minZoom: 1,
+    maxZoom: 19,
+    attributionControl: true
+  });
+  map.on('error', (e) => { console.error('map error', e && e.error); });
+
+  const PIN_COLORS = ['#1f3a5f', '#c1652f', '#3f8f6c', '#8a4fae', '#c9a23d', '#c0447a', '#2f8fa3', '#7a5230'];
+
+  const RANDOM_LOCATIONS = [
+    'Eiffel Tower', 'Statue of Liberty', 'Great Wall of China', 'Machu Picchu', 'Colosseum',
+    'Taj Mahal', 'Christ the Redeemer', 'Sydney Opera House', 'Big Ben', 'Mount Rushmore',
+    'Golden Gate Bridge', 'Great Pyramid of Giza', 'Stonehenge', 'Petra', 'Angkor Wat',
+    'Mount Everest', 'Niagara Falls', 'Sagrada Familia', 'Burj Khalifa', 'Acropolis of Athens',
+    'Japan', 'Brazil', 'Kenya', 'New Zealand', 'Iceland', 'Egypt', 'Peru', 'Norway',
+    'Thailand', 'Argentina', 'Morocco', 'Vietnam', 'Portugal', 'Greece', 'Mongolia',
+    'Tokyo', 'Paris', 'Cairo', 'Reykjavik', 'Buenos Aires', 'Marrakesh', 'Bangkok',
+    'Nairobi', 'Lisbon', 'Athens',
+    'Amazon River', 'Lake Victoria', 'Dead Sea', 'Caspian Sea', 'Mediterranean Sea',
+    'Lake Baikal', 'Bay of Bengal', 'Persian Gulf', 'Gulf of Mexico', 'Lake Titicaca'
+  ];
+
+  let stage = 'prompt';
+  let promptText = '';
+  let isRandomPrompt = false;
+  let guessers = [];
+  let currentIdx = 0;
+  let actual = null;
+  let useMiles = true;
+  let tempGuess = null;
+  let tempMarker = null;
+  let actualMarker = null;
+  let lastScores = [];
+  const finalizedMarkers = [];
+  const activeLinkLayerIds = [];
+  const LINK_PREFIX = 'link-';
+
+  const modeTag = document.getElementById('mode-tag');
+  const promptDisplay = document.getElementById('prompt-display');
+  const promptPanel = document.getElementById('prompt-panel');
+  const rosterPanel = document.getElementById('roster-panel');
+  const setupPanel = document.getElementById('setup-panel');
+  const instruction = document.getElementById('instruction');
+  const instructionText = document.getElementById('instruction-text');
+  const bottombar = document.getElementById('bottombar');
+  const revealCard = document.getElementById('reveal-card');
+  const lockBtn = document.getElementById('lock-btn');
+  const clearPinBtn = document.getElementById('clear-pin-btn');
+
+  function setStage(next){
+    stage = next;
+    promptPanel.style.display = next === 'prompt' ? 'block' : 'none';
+    rosterPanel.style.display = next === 'roster' ? 'block' : 'none';
+    setupPanel.style.display = next === 'location' ? 'block' : 'none';
+    instruction.style.display = next === 'guessing' ? 'block' : 'none';
+    bottombar.style.display = next === 'guessing' ? 'flex' : 'none';
+    revealCard.style.display = next === 'revealed' ? 'block' : 'none';
+    promptDisplay.style.display = (next !== 'prompt' && promptText) ? 'block' : 'none';
+    modeTag.textContent = next === 'prompt' ? ''
+      : next === 'roster' ? 'Add players'
+      : next === 'location' ? 'Reveal the answer'
+      : next === 'guessing' ? 'Guessing' : 'Round results';
+  }
+
+  const promptInput = document.getElementById('prompt-input');
+  const promptContinueBtn = document.getElementById('prompt-continue-btn');
+  const promptRandomBtn = document.getElementById('prompt-random-btn');
+
+  function updatePromptContinueState(){
+    promptContinueBtn.disabled = promptInput.value.trim().length === 0;
+  }
+  promptInput.addEventListener('input', () => {
+    isRandomPrompt = false;
+    updatePromptContinueState();
+  });
+  promptInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !promptContinueBtn.disabled) promptContinueBtn.click(); });
+
+  promptRandomBtn.addEventListener('click', () => {
+    const pick = RANDOM_LOCATIONS[Math.floor(Math.random() * RANDOM_LOCATIONS.length)];
+    promptInput.value = pick;
+    isRandomPrompt = true;
+    updatePromptContinueState();
+  });
+
+  promptContinueBtn.addEventListener('click', () => {
+    const text = promptInput.value.trim();
+    if (!text) return;
+    promptText = text;
+    promptDisplay.innerHTML = '<b>Guess:</b> ' + promptText;
+    if (guessers.length === 0){
+      setStage('roster');
+    } else {
+      beginGuessing();
+    }
+  });
+
+  const guesserNameInput = document.getElementById('guesser-name-input');
+  const addGuesserBtn = document.getElementById('add-guesser-btn');
+  const guesserListEl = document.getElementById('guesser-list');
+  const rosterHint = document.getElementById('roster-hint');
+  const startRoundBtn = document.getElementById('start-round-btn');
+
+  function renderGuesserList(){
+    guesserListEl.innerHTML = '';
+    guessers.forEach((g, i) => {
+      const row = document.createElement('div');
+      row.className = 'guesser-chip';
+      row.innerHTML = `<span class="order">${i+1}.</span><span class="dot" style="background:${g.color}"></span><span class="name">${g.name}</span>`;
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'remove';
+      removeBtn.textContent = '×';
+      removeBtn.addEventListener('click', () => {
+        guessers.splice(i, 1);
+        reassignColors();
+        renderGuesserList();
+      });
+      row.appendChild(removeBtn);
+      guesserListEl.appendChild(row);
+    });
+    rosterHint.textContent = guessers.length === 0
+      ? 'Add at least 1 guesser to continue. Pins get dropped in the order added.'
+      : `${guessers.length} guesser${guessers.length>1?'s':''} added, in this order. Add more or continue.`;
+    startRoundBtn.disabled = guessers.length === 0;
+  }
+
+  function reassignColors(){
+    guessers.forEach((g, i) => { g.color = PIN_COLORS[i % PIN_COLORS.length]; });
+  }
+
+  function addGuesser(){
+    const name = guesserNameInput.value.trim();
+    if (!name) return;
+    guessers.push({ name, color: PIN_COLORS[guessers.length % PIN_COLORS.length], guess: null });
+    guesserNameInput.value = '';
+    renderGuesserList();
+  }
+
+  addGuesserBtn.addEventListener('click', addGuesser);
+  guesserNameInput.addEventListener('keydown', e => { if (e.key === 'Enter') addGuesser(); });
+
+  startRoundBtn.addEventListener('click', () => {
+    if (guessers.length === 0) return;
+    beginGuessing();
+  });
+
+  renderGuesserList();
+
+  function makePinEl(color, isActual){
+    const el = document.createElement('div');
+    el.className = 'map-pin' + (isActual ? ' actual' : '');
+    if (!isActual) el.style.background = color;
+    return el;
+  }
+
+  function greatCirclePoints(a, b, steps){
+    const toRad = d => d * Math.PI/180, toDeg = r => r * 180/Math.PI;
+    const lat1 = toRad(a.lat), lon1 = toRad(a.lon), lat2 = toRad(b.lat), lon2 = toRad(b.lon);
+    const d = 2 * Math.asin(Math.sqrt(Math.sin((lat2-lat1)/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin((lon2-lon1)/2)**2));
+    const pts = [];
+    for (let i = 0; i <= steps; i++){
+      const f = i/steps;
+      if (d === 0){ pts.push([a.lon, a.lat]); continue; }
+      const A = Math.sin((1-f)*d)/Math.sin(d), B = Math.sin(f*d)/Math.sin(d);
+      const x = A*Math.cos(lat1)*Math.cos(lon1) + B*Math.cos(lat2)*Math.cos(lon2);
+      const y = A*Math.cos(lat1)*Math.sin(lon1) + B*Math.cos(lat2)*Math.sin(lon2);
+      const z = A*Math.sin(lat1) + B*Math.sin(lat2);
+      const lat = Math.atan2(z, Math.sqrt(x*x+y*y));
+      const lon = Math.atan2(y, x);
+      pts.push([toDeg(lon), toDeg(lat)]);
+    }
+    return pts;
+  }
+
+  function clearTempMarker(){
+    if (tempMarker){ tempMarker.remove(); tempMarker = null; }
+  }
+
+  function clearFinalizedLayer(){
+    finalizedMarkers.forEach(m => m.remove());
+    finalizedMarkers.length = 0;
+    if (actualMarker){ actualMarker.remove(); actualMarker = null; }
+    activeLinkLayerIds.forEach(layerId => {
+      if (map.getLayer(layerId)) map.removeLayer(layerId);
+      if (map.getSource(layerId)) map.removeSource(layerId);
+    });
+    activeLinkLayerIds.length = 0;
+  }
+
+  function drawTempPin(){
+    clearTempMarker();
+    if (tempGuess && guessers[currentIdx]){
+      tempMarker = new maplibregl.Marker({ element: makePinEl(guessers[currentIdx].color, false) })
+        .setLngLat([tempGuess.lon, tempGuess.lat]).addTo(map);
+    }
+  }
+
+  function drawRevealPins(scores){
+    clearFinalizedLayer();
+    if (!actual) return;
+    actualMarker = new maplibregl.Marker({ element: makePinEl(null, true) })
+      .setLngLat([actual.lon, actual.lat]).addTo(map);
+    guessers.forEach((g, i) => {
+      if (!g.guess) return;
+      const marker = new maplibregl.Marker({ element: makePinEl(g.color, false) })
+        .setLngLat([g.guess.lon, g.guess.lat]).addTo(map);
+      finalizedMarkers.push(marker);
+      const score = scores[i];
+      if (score.inside || !score.nearest) return;
+      const coords = greatCirclePoints(g.guess, { lat: score.nearest.lat, lon: score.nearest.lon }, 50);
+      const layerId = LINK_PREFIX + i;
+      map.addSource(layerId, { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: coords } } });
+      map.addLayer({ id: layerId, type: 'line', source: layerId,
+        paint: { 'line-color': g.color, 'line-width': 1.8, 'line-dasharray': [2,1.5], 'line-opacity': 0.85 } });
+      activeLinkLayerIds.push(layerId);
+    });
+  }
+
+  function currentGuesserLabel(){
+    const g = guessers[currentIdx];
+    return g ? `${g.name}'s turn — guesser ${currentIdx+1} of ${guessers.length}` : '';
+  }
+
+  function updateTurnUI(){
+    instructionText.innerHTML = '<span class="dot"></span>' + currentGuesserLabel() + ': tap to drop your pin';
+    lockBtn.disabled = !tempGuess;
+    lockBtn.textContent = currentIdx === guessers.length - 1 ? 'Confirm & reveal results' : 'Confirm & pass to next';
+  }
+
+  function beginGuessing(){
+    currentIdx = 0;
+    guessers.forEach(g => g.guess = null);
+    tempGuess = null;
+    clearTempMarker();
+    setStage('guessing');
+    updateTurnUI();
+  }
+
+  map.on('click', function(e){
+    if (stage !== 'guessing') return;
+    tempGuess = { lat: e.lngLat.lat, lon: e.lngLat.lng };
+    drawTempPin();
+    updateTurnUI();
+  });
+
+  clearPinBtn.addEventListener('click', () => {
+    tempGuess = null;
+    clearTempMarker();
+    updateTurnUI();
+  });
+
+  lockBtn.addEventListener('click', () => {
+    if (!tempGuess || !guessers[currentIdx]) return;
+    guessers[currentIdx].guess = tempGuess;
+    tempGuess = null;
+    clearTempMarker();
+    if (currentIdx < guessers.length - 1){
+      currentIdx += 1;
+      updateTurnUI();
+    } else {
+      setStage('location');
+      if (isRandomPrompt){
+        input.value = promptText;
+        doSearch();
+      }
+    }
+  });
+
+  const input = document.getElementById('loc-input');
+  const searchBtn = document.getElementById('search-btn');
+  const resultsEl = document.getElementById('results');
+  const statusEl = document.getElementById('setup-status');
+
+  function labelForResult(r){
+    const t = (r.addresstype || r.type || r.category || r.class || '').replace(/_/g,' ');
+    return t || 'place';
+  }
+
+  async function doSearch(){
+    const q = input.value.trim();
+    if (!q){ statusEl.textContent = 'Type something to search for.'; statusEl.className='status-msg error'; return; }
+    statusEl.textContent = 'Searching…'; statusEl.className = 'status-msg';
+    resultsEl.innerHTML = '';
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&polygon_geojson=1&polygon_threshold=0.01&limit=6&q=${encodeURIComponent(q)}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (!data.length){
+        statusEl.textContent = 'No matches found — try adding a city or country.';
+        statusEl.className = 'status-msg error';
+        return;
+      }
+      statusEl.textContent = `${data.length} match${data.length>1?'es':''} — pick the right one:`;
+      resultsEl.innerHTML = '';
+      data.forEach(r => {
+        const item = document.createElement('div');
+        item.className = 'result-item';
+        item.innerHTML = `<span class="result-kind">${labelForResult(r)}</span>${r.display_name}`;
+        item.addEventListener('click', () => confirmLocation(r));
+        resultsEl.appendChild(item);
+      });
+    } catch(err){
+      statusEl.textContent = 'Search failed: ' + err.message;
+      statusEl.className = 'status-msg error';
+    }
+  }
+
+  function confirmLocation(r){
+    actual = { lat: parseFloat(r.lat), lon: parseFloat(r.lon), name: r.display_name, geometry: r.geojson || null };
+    showResults();
+  }
+
+  searchBtn.addEventListener('click', doSearch);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+
+  function haversineKm(lat1, lon1, lat2, lon2){
+    const R = 6371;
+    const toRad = d => d * Math.PI/180;
+    const dLat = toRad(lat2-lat1), dLon = toRad(lon2-lon1);
+    const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+    return 2 * R * Math.asin(Math.sqrt(a));
+  }
+
+  const EARTH_R = 6371;
+  const toRadG = d => d * Math.PI/180, toDegG = r => r * 180/Math.PI;
+  function bearingRad(lat1, lon1, lat2, lon2){
+    const y = Math.sin(toRadG(lon2-lon1)) * Math.cos(toRadG(lat2));
+    const x = Math.cos(toRadG(lat1))*Math.sin(toRadG(lat2)) - Math.sin(toRadG(lat1))*Math.cos(toRadG(lat2))*Math.cos(toRadG(lon2-lon1));
+    return Math.atan2(y, x);
+  }
+  function ringContains(ring, lon, lat){
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++){
+      const xi = ring[i][0], yi = ring[i][1];
+      const xj = ring[j][0], yj = ring[j][1];
+      const intersect = ((yi > lat) !== (yj > lat)) &&
+        (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+  function polygonContains(rings, lon, lat){
+    if (!rings.length) return false;
+    if (!ringContains(rings[0], lon, lat)) return false;
+    for (let i = 1; i < rings.length; i++){ if (ringContains(rings[i], lon, lat)) return false; }
+    return true;
+  }
+  function multiPolygonContains(polygons, lon, lat){
+    return polygons.some(rings => polygonContains(rings, lon, lat));
+  }
+  function nearestOnSegment(pLat, pLon, aLat, aLon, bLat, bLon){
+    const d13 = haversineKm(aLat, aLon, pLat, pLon) / EARTH_R;
+    const d12 = haversineKm(aLat, aLon, bLat, bLon) / EARTH_R;
+    if (d12 < 1e-12) return { km: haversineKm(aLat, aLon, pLat, pLon), lat: aLat, lon: aLon };
+    if (d13 < 1e-9) return { km: 0, lat: aLat, lon: aLon };
+    const brng13 = bearingRad(aLat, aLon, pLat, pLon);
+    const brng12 = bearingRad(aLat, aLon, bLat, bLon);
+    const dxt = Math.asin(Math.sin(d13) * Math.sin(brng13 - brng12));
+    const cosRatio = Math.min(1, Math.max(-1, Math.cos(d13) / Math.cos(dxt)));
+    let dat = Math.acos(cosRatio);
+    if (isNaN(dat)) dat = 0;
+    if (dat > d12) return { km: haversineKm(bLat, bLon, pLat, pLon), lat: bLat, lon: bLon };
+    const latA = toRadG(aLat), lonA = toRadG(aLon);
+    const lat2 = Math.asin(Math.sin(latA)*Math.cos(dat) + Math.cos(latA)*Math.sin(dat)*Math.cos(brng12));
+    const lon2 = lonA + Math.atan2(Math.sin(brng12)*Math.sin(dat)*Math.cos(latA), Math.cos(dat) - Math.sin(latA)*Math.sin(lat2));
+    const candLat = toDegG(lat2), candLon = toDegG(lon2);
+    const distToCandidate = haversineKm(pLat, pLon, candLat, candLon);
+    const distToA = haversineKm(pLat, pLon, aLat, aLon);
+    const distToB = haversineKm(pLat, pLon, bLat, bLon);
+    if (distToCandidate <= distToA && distToCandidate <= distToB) return { km: distToCandidate, lat: candLat, lon: candLon };
+    return distToA < distToB ? { km: distToA, lat: aLat, lon: aLon } : { km: distToB, lat: bLat, lon: bLon };
+  }
+  function nearestOnRing(ring, lat, lon){
+    let best = null;
+    for (let i = 0; i < ring.length - 1; i++){
+      const a = ring[i], b = ring[i+1];
+      const cand = nearestOnSegment(lat, lon, a[1], a[0], b[1], b[0]);
+      if (!best || cand.km < best.km) best = cand;
+    }
+    return best;
+  }
+  function nearestOnPolygons(polygons, lat, lon){
+    let best = null;
+    polygons.forEach(rings => rings.forEach(ring => {
+      const cand = nearestOnRing(ring, lat, lon);
+      if (cand && (!best || cand.km < best.km)) best = cand;
+    }));
+    return best;
+  }
+  function nearestOnLines(lines, lat, lon){
+    let best = null;
+    lines.forEach(line => {
+      const cand = nearestOnRing(line, lat, lon);
+      if (cand && (!best || cand.km < best.km)) best = cand;
+    });
+    return best;
+  }
+  function normalizeGeometry(geo){
+    if (!geo) return { kind: 'point' };
+    if (geo.type === 'Polygon') return { kind: 'area', polygons: [geo.coordinates] };
+    if (geo.type === 'MultiPolygon') return { kind: 'area', polygons: geo.coordinates };
+    if (geo.type === 'LineString') return { kind: 'line', lines: [geo.coordinates] };
+    if (geo.type === 'MultiLineString') return { kind: 'line', lines: geo.coordinates };
+    return { kind: 'point' };
+  }
+  function scoreGuess(guess, actualTarget){
+    const norm = normalizeGeometry(actualTarget.geometry);
+    if (norm.kind === 'area'){
+      if (multiPolygonContains(norm.polygons, guess.lon, guess.lat)) return { km: 0, inside: true, nearest: null };
+      const nearest = nearestOnPolygons(norm.polygons, guess.lat, guess.lon);
+      return { km: nearest.km, inside: false, nearest };
+    }
+    if (norm.kind === 'line'){
+      const nearest = nearestOnLines(norm.lines, guess.lat, guess.lon);
+      return { km: nearest.km, inside: false, nearest };
+    }
+    const km = haversineKm(guess.lat, guess.lon, actualTarget.lat, actualTarget.lon);
+    return { km, inside: false, nearest: { lat: actualTarget.lat, lon: actualTarget.lon } };
+  }
+
+  const actualNameEl = document.getElementById('actual-name');
+  const leaderboardEl = document.getElementById('leaderboard');
+  const kmMiBtn = document.getElementById('km-mi-btn');
+
+  function fmtDist(km){
+    if (useMiles){
+      const miles = km * 0.621371;
+      if (miles < 0.1){
+        const yards = miles * 1760;
+        return (yards < 1 ? yards.toFixed(1) : Math.round(yards).toLocaleString()) + ' yd';
+      }
+      return (miles < 10 ? miles.toFixed(2) : Math.round(miles).toLocaleString()) + ' mi';
+    }
+    return (km < 10 ? km.toFixed(2) : Math.round(km).toLocaleString()) + ' km';
+  }
+
+  function renderLeaderboard(scores){
+    const ranked = guessers
+      .map((g, i) => ({ ...g, score: scores[i] }))
+      .filter((g, i) => guessers[i].guess)
+      .sort((a,b) => a.score.km - b.score.km);
+    leaderboardEl.innerHTML = '';
+    ranked.forEach((g, i) => {
+      const row = document.createElement('div');
+      row.className = 'lb-row' + (i === 0 ? ' first' : '');
+      const distText = g.score.inside ? 'Inside — perfect! 🎯' : fmtDist(g.score.km);
+      row.innerHTML = `<span class="lb-rank">${i+1}</span><span class="lb-dot" style="background:${g.color}"></span><span class="lb-name">${g.name}</span><span class="lb-dist">${distText}</span>`;
+      leaderboardEl.appendChild(row);
+    });
+  }
+
+  function showResults(){
+    setStage('revealed');
+    actualNameEl.textContent = actual.name;
+    lastScores = guessers.map(g => g.guess ? scoreGuess(g.guess, actual) : null);
+    drawRevealPins(lastScores);
+    renderLeaderboard(lastScores);
+    const bounds = new maplibregl.LngLatBounds();
+    bounds.extend([actual.lon, actual.lat]);
+    guessers.forEach(g => { if (g.guess) bounds.extend([g.guess.lon, g.guess.lat]); });
+    map.fitBounds(bounds, { padding: 70, maxZoom: 12, duration: 800 });
+  }
+
+  kmMiBtn.addEventListener('click', () => {
+    useMiles = !useMiles;
+    kmMiBtn.textContent = useMiles ? 'km' : 'mi';
+    renderLeaderboard(lastScores);
+  });
+
+  document.getElementById('again-btn').addEventListener('click', () => {
+    actual = null;
+    promptText = '';
+    isRandomPrompt = false;
+    promptInput.value = '';
+    input.value = '';
+    resultsEl.innerHTML = '';
+    statusEl.textContent = '';
+    clearFinalizedLayer();
+    map.jumpTo({ center: [0, 20], zoom: 1 });
+    updatePromptContinueState();
+    setStage('prompt');
+  });
+
+  document.getElementById('new-players-btn').addEventListener('click', () => {
+    actual = null;
+    guessers = [];
+    promptText = '';
+    isRandomPrompt = false;
+    promptInput.value = '';
+    input.value = '';
+    resultsEl.innerHTML = '';
+    statusEl.textContent = '';
+    clearFinalizedLayer();
+    map.jumpTo({ center: [0, 20], zoom: 1 });
+    renderGuesserList();
+    updatePromptContinueState();
+    setStage('prompt');
+  });
+
+  setStage('prompt');
+  } catch (initErr) {
+    console.error('init failed', initErr);
+    document.getElementById('app').innerHTML =
+      '<div style="padding:28px;color:#182636;background:#f6efdd;font-family:monospace;line-height:1.6;max-width:480px;">' +
+      '<h2 style="color:#3d6a99;">Something failed to start</h2>' +
+      '<p>' + (initErr && initErr.message ? initErr.message : String(initErr)) + '</p>' +
+      '</div>';
+  }
+})();
+</script>
+</body>
+</html>
