@@ -362,10 +362,8 @@ const firebaseConfig = {
   const joinSessionBtn = document.getElementById('join-session-btn');
   const landingStatus = document.getElementById('landing-status');
   let isHost = false;
-  let pendingPromptForNewSession = null;
 
   createSessionBtn.addEventListener('click', () => {
-    pendingPromptForNewSession = true;
     setLocalView('prompt');
   });
 
@@ -445,6 +443,7 @@ const firebaseConfig = {
   });
 
   let tempGuess = null, tempMarker = null, actualMarker = null;
+  let lastScores = [];
   const finalizedMarkers = [];
   const activeLinkLayerIds = [];
   const LINK_PREFIX = 'link-';
@@ -631,7 +630,7 @@ const firebaseConfig = {
   document.getElementById('km-mi-btn').addEventListener('click', () => {
     useMiles = !useMiles;
     document.getElementById('km-mi-btn').textContent = useMiles ? 'km' : 'mi';
-    if (latestDoc) render(latestDoc);
+    if (latestDoc && latestDoc.stage === 'revealed') renderLeaderboard(latestDoc, lastScores);
   });
 
   function clearFinalizedLayer(){
@@ -640,7 +639,7 @@ const firebaseConfig = {
     activeLinkLayerIds.forEach(id => { if (map.getLayer(id)) map.removeLayer(id); if (map.getSource(id)) map.removeSource(id); });
     activeLinkLayerIds.length = 0;
   }
-  function renderRevealMap(sdoc){
+  function renderRevealMap(sdoc, scores){
     clearFinalizedLayer();
     const actualTarget = sdoc.actual;
     actualMarker = new maplibregl.Marker({ element: makePinEl(null, true) }).setLngLat([actualTarget.lon, actualTarget.lat]).addTo(map);
@@ -651,7 +650,7 @@ const firebaseConfig = {
       bounds.extend([g.guess.lon, g.guess.lat]);
       const marker = new maplibregl.Marker({ element: makePinEl(g.color, false) }).setLngLat([g.guess.lon, g.guess.lat]).addTo(map);
       finalizedMarkers.push(marker);
-      const score = scoreGuess(g.guess, actualTarget);
+      const score = scores[i];
       if (score.inside || !score.nearest) return;
       const coords = greatCirclePoints(g.guess, { lat: score.nearest.lat, lon: score.nearest.lon }, 50);
       const layerId = LINK_PREFIX + i;
@@ -661,8 +660,11 @@ const firebaseConfig = {
     });
     map.fitBounds(bounds, { padding: 70, maxZoom: 12, duration: 800 });
   }
-  function renderLeaderboard(sdoc){
-    const ranked = sdoc.guessers.filter(g => g.guess).map(g => ({ ...g, score: scoreGuess(g.guess, sdoc.actual) })).sort((a,b) => a.score.km - b.score.km);
+  function renderLeaderboard(sdoc, scores){
+    const ranked = sdoc.guessers
+      .map((g, i) => ({ ...g, score: scores[i] }))
+      .filter((g, i) => sdoc.guessers[i].guess)
+      .sort((a,b) => a.score.km - b.score.km);
     const el = document.getElementById('leaderboard');
     el.innerHTML = '';
     ranked.forEach((g, i) => {
@@ -729,8 +731,9 @@ const firebaseConfig = {
 
     if (sdoc.stage === 'revealed'){
       document.getElementById('actual-name').textContent = sdoc.actual.name;
-      renderRevealMap(sdoc);
-      renderLeaderboard(sdoc);
+      lastScores = sdoc.guessers.map(g => g.guess ? scoreGuess(g.guess, sdoc.actual) : null);
+      renderRevealMap(sdoc, lastScores);
+      renderLeaderboard(sdoc, lastScores);
       document.getElementById('again-btn').style.display = isHost ? 'block' : 'none';
       setLocalView('revealed');
       return;
