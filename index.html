@@ -102,9 +102,10 @@
   </div>
 
   <div class="panel center-panel" id="landing-panel">
-    <label>Play with people on other phones</label>
-    <button class="btn full" id="create-session-btn">Create a new game</button>
-    <div class="hint" style="margin:14px 0 8px;">— or —</div>
+    <label>Saved groups</label>
+    <div class="guesser-list" id="saved-sessions-list"></div>
+    <button class="btn full" id="create-session-btn" style="margin-top:14px;">Create a new game</button>
+    <div class="hint" style="margin:14px 0 8px;">— or join with a code —</div>
     <div class="search-row">
       <input id="join-code-input" type="text" placeholder="Enter game code" autocomplete="off" style="text-transform:uppercase;">
       <button class="btn" id="join-session-btn">Join</button>
@@ -134,6 +135,14 @@
     <div class="guesser-list" id="waiting-list"></div>
     <div class="hint" id="waiting-hint">Waiting for the host to start the round.</div>
     <button class="btn full" id="host-start-btn" style="margin-top:14px;display:none;" disabled>Start guessing</button>
+    <div style="margin-top:14px;">
+      <label>Save this group for next time</label>
+      <div class="search-row">
+        <input id="save-session-name-input" type="text" placeholder="e.g. Friday game night" autocomplete="off">
+        <button class="btn ghost" id="save-session-btn">💾 Save</button>
+      </div>
+      <div class="status-msg" id="save-session-status"></div>
+    </div>
   </div>
 
   <div class="panel center-panel" id="setup-panel" style="display:none;">
@@ -392,13 +401,122 @@ const firebaseConfig = {
       }
       sessionCode = code;
       sessionDocRef = ref;
-      isHost = false;
+      isHost = snap.data().hostClientId === CLIENT_ID;
       subscribeToSession();
     } catch (err) {
       landingStatus.textContent = 'Could not reach the game server: ' + err.message;
       landingStatus.className = 'status-msg error';
     }
   });
+
+  const SAVED_SESSIONS_KEY = '180out-saved-sessions';
+  function loadSavedSessions(){
+    try { return JSON.parse(localStorage.getItem(SAVED_SESSIONS_KEY) || '[]'); }
+    catch { return []; }
+  }
+  function saveSavedSessions(arr){
+    localStorage.setItem(SAVED_SESSIONS_KEY, JSON.stringify(arr.slice(0, 5)));
+  }
+
+  const savedSessionsList = document.getElementById('saved-sessions-list');
+  function renderSavedSessionsList(){
+    const arr = loadSavedSessions();
+    savedSessionsList.innerHTML = '';
+    if (arr.length === 0){
+      savedSessionsList.innerHTML = '<div class="hint">No saved groups yet — save one after creating a game.</div>';
+      return;
+    }
+    arr.forEach((s, i) => {
+      const row = document.createElement('div');
+      row.className = 'guesser-chip';
+      row.style.justifyContent = 'space-between';
+      row.innerHTML = `<span class="name">${s.name}</span>`;
+      const btnWrap = document.createElement('div');
+      btnWrap.style.display = 'flex'; btnWrap.style.gap = '6px';
+      const playBtn = document.createElement('button');
+      playBtn.className = 'btn small'; playBtn.textContent = 'Play';
+      playBtn.addEventListener('click', () => joinSavedSession(s.code));
+      const delBtn = document.createElement('button');
+      delBtn.className = 'btn ghost small'; delBtn.textContent = '✕';
+      delBtn.addEventListener('click', () => {
+        saveSavedSessions(loadSavedSessions().filter((_, j) => j !== i));
+        renderSavedSessionsList();
+      });
+      btnWrap.appendChild(playBtn); btnWrap.appendChild(delBtn);
+      row.appendChild(btnWrap);
+      savedSessionsList.appendChild(row);
+    });
+  }
+
+  async function joinSavedSession(code){
+    landingStatus.textContent = 'Rejoining…'; landingStatus.className = 'status-msg';
+    try {
+      const ref = doc(db, 'sessions', code);
+      const snap = await getDoc(ref);
+      if (!snap.exists()){
+        landingStatus.textContent = 'That saved game no longer exists — removing it.';
+        landingStatus.className = 'status-msg error';
+        saveSavedSessions(loadSavedSessions().filter(s => s.code !== code));
+        renderSavedSessionsList();
+        return;
+      }
+      sessionCode = code;
+      sessionDocRef = ref;
+      isHost = snap.data().hostClientId === CLIENT_ID;
+      subscribeToSession();
+    } catch (err) {
+      landingStatus.textContent = 'Could not reach the game server: ' + err.message;
+      landingStatus.className = 'status-msg error';
+    }
+  }
+
+  const saveSessionNameInput = document.getElementById('save-session-name-input');
+  const saveSessionBtn = document.getElementById('save-session-btn');
+  const saveSessionStatus = document.getElementById('save-session-status');
+
+  function showReplacePicker(name){
+    const arr = loadSavedSessions();
+    saveSessionStatus.innerHTML = '';
+    const msg = document.createElement('div');
+    msg.textContent = 'You have 5 saved — tap one to replace:';
+    saveSessionStatus.appendChild(msg);
+    const wrap = document.createElement('div');
+    wrap.style.marginTop = '8px'; wrap.style.display = 'flex'; wrap.style.flexDirection = 'column'; wrap.style.gap = '6px';
+    arr.forEach((s, i) => {
+      const b = document.createElement('button');
+      b.className = 'btn ghost small'; b.textContent = 'Replace: ' + s.name;
+      b.addEventListener('click', () => {
+        const next = [...arr]; next[i] = { name, code: sessionCode };
+        saveSavedSessions(next);
+        saveSessionStatus.textContent = 'Saved!';
+        saveSessionStatus.className = 'status-msg';
+      });
+      wrap.appendChild(b);
+    });
+    saveSessionStatus.appendChild(wrap);
+  }
+
+  saveSessionBtn.addEventListener('click', () => {
+    if (!sessionCode) return;
+    const name = saveSessionNameInput.value.trim() || ('Game ' + sessionCode);
+    const arr = loadSavedSessions();
+    const existingIdx = arr.findIndex(s => s.code === sessionCode);
+    if (existingIdx >= 0){
+      arr[existingIdx].name = name;
+      saveSavedSessions(arr);
+      saveSessionStatus.textContent = 'Saved!'; saveSessionStatus.className = 'status-msg';
+      return;
+    }
+    if (arr.length < 5){
+      arr.push({ name, code: sessionCode });
+      saveSavedSessions(arr);
+      saveSessionStatus.textContent = 'Saved!'; saveSessionStatus.className = 'status-msg';
+      return;
+    }
+    showReplacePicker(name);
+  });
+
+  renderSavedSessionsList();
 
   const promptInput = document.getElementById('prompt-input');
   const promptContinueBtn = document.getElementById('prompt-continue-btn');
