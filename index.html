@@ -180,6 +180,8 @@
     <div class="reveal-head"><h2>Results</h2><button class="btn ghost small" id="km-mi-btn">km</button></div>
     <div class="actual-label">Actual location: <b id="actual-name">—</b></div>
     <div class="leaderboard" id="leaderboard"></div>
+    <div class="reveal-head" style="margin-top:16px;"><h2>Total Points</h2></div>
+    <div class="leaderboard" id="total-leaderboard"></div>
     <div class="reveal-actions">
       <button class="btn ghost" id="leave-btn">Leave game</button>
       <button class="btn full" id="again-btn" style="display:none;">New round</button>
@@ -296,6 +298,41 @@ const firebaseConfig = {
     { name: 'Gulf of Mexico', category: 'Body of Water' }, { name: 'Lake Titicaca', category: 'Body of Water' }
   ];
 
+  function shuffleArray(arr){
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+  let locationBagQueue = [];
+  let lastPickedLocation = null;
+  function nextRandomLocation(){
+    if (locationBagQueue.length === 0){
+      locationBagQueue = shuffleArray(RANDOM_LOCATIONS);
+      const lastIdx = locationBagQueue.length - 1;
+      if (lastPickedLocation && locationBagQueue[lastIdx] === lastPickedLocation && locationBagQueue.length > 1){
+        const swapIdx = Math.floor(Math.random() * (locationBagQueue.length - 1));
+        [locationBagQueue[lastIdx], locationBagQueue[swapIdx]] = [locationBagQueue[swapIdx], locationBagQueue[lastIdx]];
+      }
+    }
+    const picked = locationBagQueue.pop();
+    lastPickedLocation = picked;
+    return picked;
+  }
+
+  function pointsForScore(score){
+    if (score.inside) return 100;
+    const EPS = 1e-9;
+    const miles = score.km * 0.621371;
+    if (miles <= 10 + EPS) return 80;
+    if (miles <= 100 + EPS) return 50;
+    if (miles <= 500 + EPS) return 10;
+    if (miles <= 1000 + EPS) return 1;
+    return 0;
+  }
+
   const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   function generateSessionCode(){
     let code = '';
@@ -308,7 +345,7 @@ const firebaseConfig = {
   function joinSessionLogic(sdoc, clientId, name){
     if (sdoc.stage !== 'roster') return { ok: false, reason: 'Round already in progress' };
     if (sdoc.guessers.some(g => g.clientId === clientId)) return { ok: false, reason: 'Already joined' };
-    const next = { ...sdoc, guessers: [...sdoc.guessers, { clientId, name, color: PIN_COLORS[sdoc.guessers.length % PIN_COLORS.length], guess: null }] };
+    const next = { ...sdoc, guessers: [...sdoc.guessers, { clientId, name, color: PIN_COLORS[sdoc.guessers.length % PIN_COLORS.length], guess: null, totalPoints: 0 }] };
     return { ok: true, doc: next };
   }
   function startGuessingLogic(sdoc, requestingClientId){
@@ -327,7 +364,13 @@ const firebaseConfig = {
   function confirmLocationLogic(sdoc, requestingClientId, actualTarget){
     if (requestingClientId !== sdoc.hostClientId) return { ok: false, reason: 'Only the host can reveal the answer' };
     if (sdoc.stage !== 'location') return { ok: false, reason: 'Not ready to reveal yet' };
-    return { ok: true, doc: { ...sdoc, actual: actualTarget, stage: 'revealed' } };
+    const guessers = sdoc.guessers.map(g => {
+      const priorTotal = g.totalPoints || 0;
+      if (!g.guess) return { ...g, totalPoints: priorTotal };
+      const score = scoreGuess(g.guess, actualTarget);
+      return { ...g, totalPoints: priorTotal + pointsForScore(score) };
+    });
+    return { ok: true, doc: { ...sdoc, actual: actualTarget, stage: 'revealed', guessers } };
   }
   function submitNewPromptLogic(sdoc, requestingClientId, promptText){
     if (requestingClientId !== sdoc.hostClientId) return { ok: false, reason: 'Only the host can set the next location' };
@@ -551,7 +594,7 @@ const firebaseConfig = {
   });
   promptInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !promptContinueBtn.disabled) promptContinueBtn.click(); });
   promptRandomBtn.addEventListener('click', () => {
-    const pick = RANDOM_LOCATIONS[Math.floor(Math.random() * RANDOM_LOCATIONS.length)];
+    const pick = nextRandomLocation();
     promptInput.value = `${pick.name} - ${pick.category}`;
     isRandomPrompt = true;
     randomSearchQuery = pick.name;
@@ -758,6 +801,30 @@ const firebaseConfig = {
     if (geo.type === 'MultiLineString') return { kind: 'line', lines: geo.coordinates };
     return { kind: 'point' };
   }
+  function destinationPoint(lat, lon, bearingDeg, distanceKm){
+    const R = 6371;
+    const d = distanceKm / R;
+    const brng = bearingDeg * Math.PI / 180;
+    const phi1 = lat * Math.PI / 180, lambda1 = lon * Math.PI / 180;
+    const phi2 = Math.asin(Math.sin(phi1) * Math.cos(d) + Math.cos(phi1) * Math.sin(d) * Math.cos(brng));
+    const lambda2 = lambda1 + Math.atan2(
+      Math.sin(brng) * Math.sin(d) * Math.cos(phi1),
+      Math.cos(d) - Math.sin(phi1) * Math.sin(phi2)
+    );
+    return { lat: phi2 * 180 / Math.PI, lon: lambda2 * 180 / Math.PI };
+  }
+  function makeCircleRing(lat, lon, radiusKm, numPoints){
+    numPoints = numPoints || 24;
+    const coords = [];
+    for (let i = 0; i <= numPoints; i++){
+      const bearing = (360 / numPoints) * i;
+      const pt = destinationPoint(lat, lon, bearing, radiusKm);
+      coords.push([pt.lon, pt.lat]);
+    }
+    return coords;
+  }
+  const LANDMARK_CIRCLE_RADIUS_KM = 0.04572; // 50 yards
+
   function scoreGuess(guess, actualTarget){
     const geo = actualTarget.geometryJSON ? JSON.parse(actualTarget.geometryJSON) : null;
     const norm = normalizeGeometry(geo);
@@ -770,8 +837,11 @@ const firebaseConfig = {
       const nearest = nearestOnLines(norm.lines, guess.lat, guess.lon);
       return { km: nearest.km, inside: false, nearest };
     }
-    const km = haversineKm(guess.lat, guess.lon, actualTarget.lat, actualTarget.lon);
-    return { km, inside: false, nearest: { lat: actualTarget.lat, lon: actualTarget.lon } };
+    const circleRing = makeCircleRing(actualTarget.lat, actualTarget.lon, LANDMARK_CIRCLE_RADIUS_KM);
+    const circlePolygons = [[circleRing]];
+    if (multiPolygonContains(circlePolygons, guess.lon, guess.lat)) return { km: 0, inside: true, nearest: null };
+    const nearest = nearestOnPolygons(circlePolygons, guess.lat, guess.lon);
+    return { km: nearest.km, inside: false, nearest };
   }
   function greatCirclePoints(a, b, steps){
     const toRad = d => d*Math.PI/180, toDeg = r => r*180/Math.PI;
@@ -842,8 +912,21 @@ const firebaseConfig = {
     ranked.forEach((g, i) => {
       const row = document.createElement('div');
       row.className = 'lb-row' + (i === 0 ? ' first' : '');
-      const distText = g.score.inside ? 'Inside — perfect! 🎯' : fmtDist(g.score.km);
+      const pts = pointsForScore(g.score);
+      const distText = g.score.inside ? `Inside — perfect! 🎯 (${pts} pts)` : `${fmtDist(g.score.km)} (${pts} pts)`;
       row.innerHTML = `<span class="lb-rank">${i+1}</span><span class="lb-dot" style="background:${g.color}"></span><span class="lb-name">${g.name}</span><span class="lb-dist">${distText}</span>`;
+      el.appendChild(row);
+    });
+  }
+
+  function renderTotalLeaderboard(sdoc){
+    const ranked = [...sdoc.guessers].sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
+    const el = document.getElementById('total-leaderboard');
+    el.innerHTML = '';
+    ranked.forEach((g, i) => {
+      const row = document.createElement('div');
+      row.className = 'lb-row' + (i === 0 ? ' first' : '');
+      row.innerHTML = `<span class="lb-rank">${i+1}</span><span class="lb-dot" style="background:${g.color}"></span><span class="lb-name">${g.name}</span><span class="lb-dist">${g.totalPoints || 0} pts</span>`;
       el.appendChild(row);
     });
   }
@@ -927,6 +1010,7 @@ const firebaseConfig = {
       lastScores = sdoc.guessers.map(g => g.guess ? scoreGuess(g.guess, sdoc.actual) : null);
       renderRevealMap(sdoc, lastScores);
       renderLeaderboard(sdoc, lastScores);
+      renderTotalLeaderboard(sdoc);
       document.getElementById('again-btn').style.display = isHost ? 'block' : 'none';
       setLocalView('revealed');
       return;
