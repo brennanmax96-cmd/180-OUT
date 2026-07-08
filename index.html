@@ -266,16 +266,34 @@ const firebaseConfig = {
 
   const PIN_COLORS = ['#1f3a5f', '#c1652f', '#3f8f6c', '#8a4fae', '#c9a23d', '#c0447a', '#2f8fa3', '#7a5230'];
   const RANDOM_LOCATIONS = [
-    'Eiffel Tower', 'Statue of Liberty', 'Great Wall of China', 'Machu Picchu', 'Colosseum',
-    'Taj Mahal', 'Christ the Redeemer', 'Sydney Opera House', 'Big Ben', 'Mount Rushmore',
-    'Golden Gate Bridge', 'Great Pyramid of Giza', 'Stonehenge', 'Petra', 'Angkor Wat',
-    'Mount Everest', 'Niagara Falls', 'Sagrada Familia', 'Burj Khalifa', 'Acropolis of Athens',
-    'Japan', 'Brazil', 'Kenya', 'New Zealand', 'Iceland', 'Egypt', 'Peru', 'Norway',
-    'Thailand', 'Argentina', 'Morocco', 'Vietnam', 'Portugal', 'Greece', 'Mongolia',
-    'Tokyo', 'Paris', 'Cairo', 'Reykjavik', 'Buenos Aires', 'Marrakesh', 'Bangkok',
-    'Nairobi', 'Lisbon', 'Athens',
-    'Amazon River', 'Lake Victoria', 'Dead Sea', 'Caspian Sea', 'Mediterranean Sea',
-    'Lake Baikal', 'Bay of Bengal', 'Persian Gulf', 'Gulf of Mexico', 'Lake Titicaca'
+    { name: 'Eiffel Tower', category: 'Landmark' }, { name: 'Statue of Liberty', category: 'Landmark' },
+    { name: 'Great Wall of China', category: 'Landmark' }, { name: 'Machu Picchu', category: 'Landmark' },
+    { name: 'Colosseum', category: 'Landmark' }, { name: 'Taj Mahal', category: 'Landmark' },
+    { name: 'Christ the Redeemer', category: 'Landmark' }, { name: 'Sydney Opera House', category: 'Landmark' },
+    { name: 'Big Ben', category: 'Landmark' }, { name: 'Mount Rushmore', category: 'Landmark' },
+    { name: 'Golden Gate Bridge', category: 'Landmark' }, { name: 'Great Pyramid of Giza', category: 'Landmark' },
+    { name: 'Stonehenge', category: 'Landmark' }, { name: 'Petra', category: 'Landmark' },
+    { name: 'Angkor Wat', category: 'Landmark' }, { name: 'Mount Everest', category: 'Landmark' },
+    { name: 'Niagara Falls', category: 'Landmark' }, { name: 'Sagrada Familia', category: 'Landmark' },
+    { name: 'Burj Khalifa', category: 'Landmark' }, { name: 'Acropolis of Athens', category: 'Landmark' },
+    { name: 'Japan', category: 'Country' }, { name: 'Brazil', category: 'Country' },
+    { name: 'Kenya', category: 'Country' }, { name: 'New Zealand', category: 'Country' },
+    { name: 'Iceland', category: 'Country' }, { name: 'Egypt', category: 'Country' },
+    { name: 'Peru', category: 'Country' }, { name: 'Norway', category: 'Country' },
+    { name: 'Thailand', category: 'Country' }, { name: 'Argentina', category: 'Country' },
+    { name: 'Morocco', category: 'Country' }, { name: 'Vietnam', category: 'Country' },
+    { name: 'Portugal', category: 'Country' }, { name: 'Greece', category: 'Country' },
+    { name: 'Mongolia', category: 'Country' },
+    { name: 'Tokyo', category: 'City' }, { name: 'Paris', category: 'City' },
+    { name: 'Cairo', category: 'City' }, { name: 'Reykjavik', category: 'City' },
+    { name: 'Buenos Aires', category: 'City' }, { name: 'Marrakesh', category: 'City' },
+    { name: 'Bangkok', category: 'City' }, { name: 'Nairobi', category: 'City' },
+    { name: 'Lisbon', category: 'City' }, { name: 'Athens', category: 'City' },
+    { name: 'Amazon River', category: 'Body of Water' }, { name: 'Lake Victoria', category: 'Body of Water' },
+    { name: 'Dead Sea', category: 'Body of Water' }, { name: 'Caspian Sea', category: 'Body of Water' },
+    { name: 'Mediterranean Sea', category: 'Body of Water' }, { name: 'Lake Baikal', category: 'Body of Water' },
+    { name: 'Bay of Bengal', category: 'Body of Water' }, { name: 'Persian Gulf', category: 'Body of Water' },
+    { name: 'Gulf of Mexico', category: 'Body of Water' }, { name: 'Lake Titicaca', category: 'Body of Water' }
   ];
 
   const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -383,6 +401,9 @@ const firebaseConfig = {
   const joinSessionBtn = document.getElementById('join-session-btn');
   const landingStatus = document.getElementById('landing-status');
   let isHost = false;
+  let isRandomPrompt = false;
+  let randomSearchQuery = '';
+  let autoLocationSearchDone = false;
 
   createSessionBtn.addEventListener('click', () => {
     setLocalView('prompt');
@@ -523,10 +544,17 @@ const firebaseConfig = {
   const promptRandomBtn = document.getElementById('prompt-random-btn');
 
   function updatePromptContinueState(){ promptContinueBtn.disabled = promptInput.value.trim().length === 0; }
-  promptInput.addEventListener('input', updatePromptContinueState);
+  promptInput.addEventListener('input', () => {
+    isRandomPrompt = false;
+    randomSearchQuery = '';
+    updatePromptContinueState();
+  });
   promptInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !promptContinueBtn.disabled) promptContinueBtn.click(); });
   promptRandomBtn.addEventListener('click', () => {
-    promptInput.value = RANDOM_LOCATIONS[Math.floor(Math.random() * RANDOM_LOCATIONS.length)];
+    const pick = RANDOM_LOCATIONS[Math.floor(Math.random() * RANDOM_LOCATIONS.length)];
+    promptInput.value = `${pick.name} - ${pick.category}`;
+    isRandomPrompt = true;
+    randomSearchQuery = pick.name;
     updatePromptContinueState();
   });
 
@@ -636,6 +664,10 @@ const firebaseConfig = {
       const res = await fetch(url);
       const data = await res.json();
       if (!data.length){ statusEl.textContent = 'No matches found — try adding a city or country.'; statusEl.className = 'status-msg error'; return; }
+      if (isRandomPrompt){
+        confirmLocation(data[0]);
+        return;
+      }
       statusEl.textContent = `${data.length} match${data.length>1?'es':''} — pick the right one:`;
       resultsEl.innerHTML = '';
       data.forEach(r => {
@@ -820,6 +852,9 @@ const firebaseConfig = {
     clearFinalizedLayer();
     map.jumpTo({ center: [0, 20], zoom: 1 });
     promptInput.value = '';
+    isRandomPrompt = false;
+    randomSearchQuery = '';
+    autoLocationSearchDone = false;
     updatePromptContinueState();
     await runOnSession(resetForNewRoundLogic, CLIENT_ID);
   });
@@ -840,6 +875,7 @@ const firebaseConfig = {
 
     if (sdoc.stage === 'prompt'){
       setLocalView(isHost ? 'prompt' : 'prompt-wait');
+      if (isHost) promptContinueBtn.textContent = 'Start next round';
       return;
     }
 
@@ -878,6 +914,11 @@ const firebaseConfig = {
 
     if (sdoc.stage === 'location'){
       setLocalView(isHost ? 'location-host' : 'location-wait');
+      if (isHost && isRandomPrompt && !autoLocationSearchDone){
+        autoLocationSearchDone = true;
+        input.value = randomSearchQuery || sdoc.promptText;
+        doSearch();
+      }
       return;
     }
 
