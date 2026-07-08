@@ -31,11 +31,11 @@
   .brand h1{font-family:'Fraunces',serif;font-weight:700;font-size:26px;color:var(--cream);margin:0;letter-spacing:0.5px;text-shadow:0 2px 3px rgba(0,0,0,0.35);}
   .brand span{font-size:11px;color:var(--cream-2);letter-spacing:1.5px;text-transform:uppercase;}
   .tagline{margin-top:4px;font-size:12px;font-style:italic;color:var(--cream-2);opacity:0.9;}
-  .prompt-display{margin-top:6px;font-size:13px;color:var(--cream);pointer-events:none;}
+  .prompt-display{margin-top:6px;font-size:15px;font-weight:700;color:var(--cream);pointer-events:none;line-height:1.35;}
   .prompt-display b{color:var(--gold);}
 
   .panel{background:var(--cream);border:2px solid var(--navy);border-radius:14px;padding:16px;pointer-events:auto;box-shadow:0 10px 26px rgba(0,0,0,0.4);}
-  .center-panel{position:absolute;left:16px;right:16px;top:104px;z-index:900;max-width:460px;margin:0 auto;max-height:70vh;overflow-y:auto;}
+  .center-panel{position:absolute;left:16px;right:16px;top:142px;z-index:900;max-width:460px;margin:0 auto;max-height:66vh;overflow-y:auto;}
   .center-panel label{display:block;font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:var(--navy);font-weight:700;margin-bottom:8px;}
   .search-row{display:flex;gap:8px;}
   .search-row input{flex:1;background:var(--paper);border:1.5px solid var(--navy);border-radius:9px;color:var(--ink);padding:11px 12px;font-family:'JetBrains Mono',monospace;font-size:14px;}
@@ -65,7 +65,7 @@
   .code-display .code{font-family:'Fraunces',serif;font-weight:700;font-size:38px;letter-spacing:6px;color:var(--navy);}
   .code-display .label{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-top:2px;}
 
-  .instruction{position:absolute;top:104px;left:50%;transform:translateX(-50%);z-index:900;padding:10px 18px;border-radius:999px;pointer-events:none;max-width:88vw;}
+  .instruction{position:absolute;top:142px;left:50%;transform:translateX(-50%);z-index:900;padding:10px 18px;border-radius:999px;pointer-events:none;max-width:88vw;}
   .instruction span.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--navy);margin-right:8px;animation:pulse 1.4s ease-in-out infinite;}
   @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.25;}}
   .instruction p{margin:0;color:var(--ink);font-size:13px;font-weight:600;text-align:center;}
@@ -145,6 +145,11 @@
     <div class="status-msg" id="setup-status"></div>
     <div class="results" id="results"></div>
     <div class="hint">Picking a result here reveals the results for everyone immediately.</div>
+  </div>
+
+  <div class="panel center-panel" id="waiting-newprompt-panel" style="display:none;">
+    <label>Round over!</label>
+    <div class="hint">Waiting for the host to set up the next round...</div>
   </div>
 
   <div class="panel center-panel" id="waiting-reveal-panel" style="display:none;">
@@ -297,9 +302,14 @@ const firebaseConfig = {
     if (sdoc.stage !== 'location') return { ok: false, reason: 'Not ready to reveal yet' };
     return { ok: true, doc: { ...sdoc, actual: actualTarget, stage: 'revealed' } };
   }
+  function submitNewPromptLogic(sdoc, requestingClientId, promptText){
+    if (requestingClientId !== sdoc.hostClientId) return { ok: false, reason: 'Only the host can set the next location' };
+    if (sdoc.stage !== 'prompt') return { ok: false, reason: 'Not ready for a new prompt yet' };
+    return { ok: true, doc: { ...sdoc, promptText, stage: 'guessing', currentIdx: 0 } };
+  }
   function resetForNewRoundLogic(sdoc, requestingClientId){
     if (requestingClientId !== sdoc.hostClientId) return { ok: false, reason: 'Only the host can start a new round' };
-    return { ok: true, doc: { ...sdoc, stage: 'roster', currentIdx: 0, actual: null,
+    return { ok: true, doc: { ...sdoc, stage: 'prompt', promptText: '', currentIdx: 0, actual: null,
       guessers: sdoc.guessers.map(g => ({ ...g, guess: null })) } };
   }
 
@@ -332,6 +342,7 @@ const firebaseConfig = {
   const waitingPanel = document.getElementById('waiting-panel');
   const setupPanel = document.getElementById('setup-panel');
   const waitingRevealPanel = document.getElementById('waiting-reveal-panel');
+  const waitingNewPromptPanel = document.getElementById('waiting-newprompt-panel');
   const instruction = document.getElementById('instruction');
   const instructionText = document.getElementById('instruction-text');
   const bottombar = document.getElementById('bottombar');
@@ -347,13 +358,14 @@ const firebaseConfig = {
     waitingPanel.style.display = next === 'waiting' ? 'block' : 'none';
     setupPanel.style.display = next === 'location-host' ? 'block' : 'none';
     waitingRevealPanel.style.display = next === 'location-wait' ? 'block' : 'none';
+    waitingNewPromptPanel.style.display = next === 'prompt-wait' ? 'block' : 'none';
     instruction.style.display = (next === 'guessing-mine' || next === 'guessing-theirs') ? 'block' : 'none';
     bottombar.style.display = next === 'guessing-mine' ? 'flex' : 'none';
     revealCard.style.display = next === 'revealed' ? 'block' : 'none';
     modeTag.textContent = ({
-      landing: '', prompt: '', waiting: 'Waiting room', 'guessing-mine': 'Your turn',
+      landing: '', prompt: 'Name the next location', waiting: 'Waiting room', 'guessing-mine': 'Your turn',
       'guessing-theirs': 'Guessing', 'location-host': 'Reveal the answer',
-      'location-wait': 'Reveal the answer', revealed: 'Round results'
+      'location-wait': 'Reveal the answer', 'prompt-wait': 'Waiting for host', revealed: 'Round results'
     })[next] || '';
   }
 
@@ -404,6 +416,16 @@ const firebaseConfig = {
     const text = promptInput.value.trim();
     if (!text) return;
     promptContinueBtn.disabled = true;
+
+    if (sessionDocRef){
+      promptContinueBtn.textContent = 'Starting…';
+      const ok = await runOnSession(submitNewPromptLogic, CLIENT_ID, text);
+      promptInput.value = '';
+      promptContinueBtn.textContent = 'Create game';
+      if (!ok) promptContinueBtn.disabled = false;
+      return;
+    }
+
     promptContinueBtn.textContent = 'Creating…';
     try {
       const code = generateSessionCode();
@@ -679,17 +701,29 @@ const firebaseConfig = {
   document.getElementById('again-btn').addEventListener('click', async () => {
     clearFinalizedLayer();
     map.jumpTo({ center: [0, 20], zoom: 1 });
+    promptInput.value = '';
+    updatePromptContinueState();
     await runOnSession(resetForNewRoundLogic, CLIENT_ID);
   });
   document.getElementById('leave-btn').addEventListener('click', () => { window.location.reload(); });
 
   function render(sdoc){
     latestDoc = sdoc;
-    if (sdoc.promptText) promptDisplay.innerHTML = '<b>Guess:</b> ' + sdoc.promptText;
-    promptDisplay.style.display = 'block';
+    if (sdoc.promptText){
+      promptDisplay.innerHTML = '<b>Guess:</b> ' + sdoc.promptText;
+      promptDisplay.style.display = 'block';
+    } else {
+      promptDisplay.innerHTML = '';
+      promptDisplay.style.display = 'none';
+    }
     sessionCodeDisplay.textContent = sessionCode;
 
     const myEntry = sdoc.guessers.find(g => g.clientId === CLIENT_ID);
+
+    if (sdoc.stage === 'prompt'){
+      setLocalView(isHost ? 'prompt' : 'prompt-wait');
+      return;
+    }
 
     if (sdoc.stage === 'roster'){
       joinNameRow.style.display = myEntry ? 'none' : 'block';
