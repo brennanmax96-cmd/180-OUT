@@ -125,6 +125,7 @@
 
   <div class="panel center-panel" id="waiting-panel" style="display:none;">
     <div class="code-display"><div class="code" id="session-code-display">------</div><div class="label">Game code — share with other players</div></div>
+    <button class="btn ghost full" id="copy-link-btn" style="margin-bottom:14px;">📋 Copy invite link</button>
     <div id="join-name-row">
       <label for="my-name-input">Your name</label>
       <div class="search-row">
@@ -278,6 +279,11 @@ const firebaseConfig = {
     { name: 'Angkor Wat', category: 'Landmark' }, { name: 'Mount Everest', category: 'Landmark' },
     { name: 'Niagara Falls', category: 'Landmark' }, { name: 'Sagrada Familia', category: 'Landmark' },
     { name: 'Burj Khalifa', category: 'Landmark' }, { name: 'Acropolis of Athens', category: 'Landmark' },
+    { name: 'Leaning Tower of Pisa', category: 'Landmark' }, { name: 'Neuschwanstein Castle', category: 'Landmark' },
+    { name: 'Chichen Itza', category: 'Landmark' }, { name: 'Table Mountain', category: 'Landmark' },
+    { name: 'CN Tower', category: 'Landmark' }, { name: 'Empire State Building', category: 'Landmark' },
+    { name: 'Hollywood Sign', category: 'Landmark' }, { name: 'Mount Fuji', category: 'Landmark' },
+    { name: 'Uluru', category: 'Landmark' }, { name: 'Victoria Falls', category: 'Landmark' },
     { name: 'Japan', category: 'Country' }, { name: 'Brazil', category: 'Country' },
     { name: 'Kenya', category: 'Country' }, { name: 'New Zealand', category: 'Country' },
     { name: 'Iceland', category: 'Country' }, { name: 'Egypt', category: 'Country' },
@@ -285,17 +291,35 @@ const firebaseConfig = {
     { name: 'Thailand', category: 'Country' }, { name: 'Argentina', category: 'Country' },
     { name: 'Morocco', category: 'Country' }, { name: 'Vietnam', category: 'Country' },
     { name: 'Portugal', category: 'Country' }, { name: 'Greece', category: 'Country' },
-    { name: 'Mongolia', category: 'Country' },
+    { name: 'Mongolia', category: 'Country' }, { name: 'Canada', category: 'Country' },
+    { name: 'Australia', category: 'Country' }, { name: 'India', category: 'Country' },
+    { name: 'Switzerland', category: 'Country' }, { name: 'Chile', category: 'Country' },
+    { name: 'Tanzania', category: 'Country' }, { name: 'Indonesia', category: 'Country' },
+    { name: 'Ireland', category: 'Country' }, { name: 'Finland', category: 'Country' },
+    { name: 'Croatia', category: 'Country' },
     { name: 'Tokyo', category: 'City' }, { name: 'Paris', category: 'City' },
     { name: 'Cairo', category: 'City' }, { name: 'Reykjavik', category: 'City' },
     { name: 'Buenos Aires', category: 'City' }, { name: 'Marrakesh', category: 'City' },
     { name: 'Bangkok', category: 'City' }, { name: 'Nairobi', category: 'City' },
     { name: 'Lisbon', category: 'City' }, { name: 'Athens', category: 'City' },
+    { name: 'Rome', category: 'City' }, { name: 'London', category: 'City' },
+    { name: 'Barcelona', category: 'City' }, { name: 'Dubai', category: 'City' },
+    { name: 'Singapore', category: 'City' }, { name: 'Rio de Janeiro', category: 'City' },
+    { name: 'Vienna', category: 'City' }, { name: 'Amsterdam', category: 'City' },
+    { name: 'Istanbul', category: 'City' }, { name: 'Seoul', category: 'City' },
+    { name: 'Mexico City', category: 'City' }, { name: 'Cape Town', category: 'City' },
+    { name: 'Kyoto', category: 'City' }, { name: 'Prague', category: 'City' },
+    { name: 'Havana', category: 'City' },
     { name: 'Amazon River', category: 'Body of Water' }, { name: 'Lake Victoria', category: 'Body of Water' },
     { name: 'Dead Sea', category: 'Body of Water' }, { name: 'Caspian Sea', category: 'Body of Water' },
     { name: 'Mediterranean Sea', category: 'Body of Water' }, { name: 'Lake Baikal', category: 'Body of Water' },
     { name: 'Bay of Bengal', category: 'Body of Water' }, { name: 'Persian Gulf', category: 'Body of Water' },
-    { name: 'Gulf of Mexico', category: 'Body of Water' }, { name: 'Lake Titicaca', category: 'Body of Water' }
+    { name: 'Gulf of Mexico', category: 'Body of Water' }, { name: 'Lake Titicaca', category: 'Body of Water' },
+    { name: 'Nile River', category: 'Body of Water' }, { name: 'Lake Superior', category: 'Body of Water' },
+    { name: 'Red Sea', category: 'Body of Water' }, { name: 'Black Sea', category: 'Body of Water' },
+    { name: 'English Channel', category: 'Body of Water' }, { name: 'Yangtze River', category: 'Body of Water' },
+    { name: 'Lake Tanganyika', category: 'Body of Water' }, { name: 'Adriatic Sea', category: 'Body of Water' },
+    { name: 'Ganges River', category: 'Body of Water' }, { name: 'Baltic Sea', category: 'Body of Water' }
   ];
 
   function shuffleArray(arr){
@@ -632,6 +656,35 @@ const firebaseConfig = {
   });
 
   const sessionCodeDisplay = document.getElementById('session-code-display');
+  const copyLinkBtn = document.getElementById('copy-link-btn');
+  copyLinkBtn.addEventListener('click', async () => {
+    if (!sessionCode) return;
+    const url = `${window.location.origin}${window.location.pathname}?join=${sessionCode}`;
+    const originalText = copyLinkBtn.textContent;
+    let copied = false;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText){
+        await navigator.clipboard.writeText(url);
+        copied = true;
+      }
+    } catch (e) { /* fall through to legacy method below */ }
+    if (!copied){
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = url;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        copied = true;
+      } catch (e) { /* both copy methods failed */ }
+    }
+    copyLinkBtn.textContent = copied ? '✓ Link copied!' : ('Copy failed — code: ' + sessionCode);
+    setTimeout(() => { copyLinkBtn.textContent = originalText; }, 2500);
+  });
   const joinNameRow = document.getElementById('join-name-row');
   const myNameInput = document.getElementById('my-name-input');
   const joinNameBtn = document.getElementById('join-name-btn');
@@ -703,7 +756,7 @@ const firebaseConfig = {
     statusEl.textContent = 'Searching…'; statusEl.className = 'status-msg';
     resultsEl.innerHTML = '';
     try {
-      const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&polygon_geojson=1&polygon_threshold=0.01&limit=6&q=${encodeURIComponent(q)}`;
+      const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&polygon_geojson=1&polygon_threshold=0.02&limit=6&q=${encodeURIComponent(q)}`;
       const res = await fetch(url);
       const data = await res.json();
       if (!data.length){ statusEl.textContent = 'No matches found — try adding a city or country.'; statusEl.className = 'status-msg error'; return; }
@@ -722,9 +775,26 @@ const firebaseConfig = {
       });
     } catch(err){ statusEl.textContent = 'Search failed: ' + err.message; statusEl.className = 'status-msg error'; }
   }
+  const LARGE_AREA_THRESHOLD_KM = 5;
+  function boundingBoxToPolygon(boundingbox){
+    if (!boundingbox || boundingbox.length !== 4) return null;
+    const south = parseFloat(boundingbox[0]), north = parseFloat(boundingbox[1]);
+    const west = parseFloat(boundingbox[2]), east = parseFloat(boundingbox[3]);
+    const widthKm = haversineKm(south, west, south, east);
+    const heightKm = haversineKm(south, west, north, west);
+    if (Math.max(widthKm, heightKm) < LARGE_AREA_THRESHOLD_KM) return null;
+    const ring = [[west,south],[east,south],[east,north],[west,north],[west,south]];
+    return { type: 'Polygon', coordinates: [ring] };
+  }
   async function confirmLocation(r){
-    const actualTarget = { lat: parseFloat(r.lat), lon: parseFloat(r.lon), name: r.display_name,
-      geometryJSON: r.geojson ? JSON.stringify(r.geojson) : null };
+    let geometryJSON = (r.geojson && (r.geojson.type === 'Polygon' || r.geojson.type === 'MultiPolygon' ||
+      r.geojson.type === 'LineString' || r.geojson.type === 'MultiLineString'))
+      ? JSON.stringify(r.geojson) : null;
+    if (!geometryJSON && r.boundingbox){
+      const bboxPoly = boundingBoxToPolygon(r.boundingbox);
+      if (bboxPoly) geometryJSON = JSON.stringify(bboxPoly);
+    }
+    const actualTarget = { lat: parseFloat(r.lat), lon: parseFloat(r.lon), name: r.display_name, geometryJSON };
     await runOnSession(confirmLocationLogic, CLIENT_ID, actualTarget);
   }
   searchBtn.addEventListener('click', doSearch);
@@ -1026,6 +1096,15 @@ const firebaseConfig = {
   }
 
   setLocalView('landing');
+
+  // if opened via a shared invite link (?join=CODE), jump straight into joining
+  const urlParams = new URLSearchParams(window.location.search);
+  const joinParam = urlParams.get('join');
+  if (joinParam){
+    history.replaceState({}, '', window.location.pathname);
+    joinCodeInput.value = joinParam.toUpperCase();
+    joinSessionBtn.click();
+  }
   } catch (initErr) {
     console.error('init failed', initErr);
     document.getElementById('app').innerHTML =
