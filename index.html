@@ -309,7 +309,7 @@ const firebaseConfig = {
   let latestDoc = null;
 
   async function runOnSession(logicFn, ...args){
-    if (!sessionDocRef) return;
+    if (!sessionDocRef) return false;
     try {
       await runTransaction(db, async (tx) => {
         const snap = await tx.get(sessionDocRef);
@@ -318,8 +318,10 @@ const firebaseConfig = {
         if (!result.ok) throw new Error(result.reason);
         tx.set(sessionDocRef, result.doc);
       });
+      return true;
     } catch (err) {
       showError(err.message || 'Something went wrong syncing with the game.');
+      return false;
     }
   }
 
@@ -431,11 +433,15 @@ const firebaseConfig = {
   joinNameBtn.addEventListener('click', async () => {
     const name = myNameInput.value.trim();
     if (!name) return;
-    await runOnSession(joinSessionLogic, CLIENT_ID, name);
+    joinNameBtn.disabled = true;
+    const ok = await runOnSession(joinSessionLogic, CLIENT_ID, name);
+    if (!ok) joinNameBtn.disabled = false;
   });
 
   hostStartBtn.addEventListener('click', async () => {
-    await runOnSession(startGuessingLogic, CLIENT_ID);
+    hostStartBtn.disabled = true;
+    const ok = await runOnSession(startGuessingLogic, CLIENT_ID);
+    if (!ok) hostStartBtn.disabled = false;
   });
 
   let tempGuess = null, tempMarker = null, actualMarker = null;
@@ -464,8 +470,15 @@ const firebaseConfig = {
   clearPinBtn.addEventListener('click', () => { tempGuess = null; clearTempMarker(); lockBtn.disabled = true; });
   lockBtn.addEventListener('click', async () => {
     if (!tempGuess) return;
-    await runOnSession(submitGuessLogic, CLIENT_ID, tempGuess);
-    tempGuess = null; clearTempMarker();
+    lockBtn.disabled = true;
+    lockBtn.textContent = 'Submitting…';
+    const ok = await runOnSession(submitGuessLogic, CLIENT_ID, tempGuess);
+    if (ok){
+      tempGuess = null; clearTempMarker();
+    } else {
+      lockBtn.disabled = false;
+    }
+    lockBtn.textContent = 'Confirm guess';
   });
 
   const input = document.getElementById('loc-input');
@@ -496,7 +509,8 @@ const firebaseConfig = {
     } catch(err){ statusEl.textContent = 'Search failed: ' + err.message; statusEl.className = 'status-msg error'; }
   }
   async function confirmLocation(r){
-    const actualTarget = { lat: parseFloat(r.lat), lon: parseFloat(r.lon), name: r.display_name, geometry: r.geojson || null };
+    const actualTarget = { lat: parseFloat(r.lat), lon: parseFloat(r.lon), name: r.display_name,
+      geometryJSON: r.geojson ? JSON.stringify(r.geojson) : null };
     await runOnSession(confirmLocationLogic, CLIENT_ID, actualTarget);
   }
   searchBtn.addEventListener('click', doSearch);
@@ -574,7 +588,8 @@ const firebaseConfig = {
     return { kind: 'point' };
   }
   function scoreGuess(guess, actualTarget){
-    const norm = normalizeGeometry(actualTarget.geometry);
+    const geo = actualTarget.geometryJSON ? JSON.parse(actualTarget.geometryJSON) : null;
+    const norm = normalizeGeometry(geo);
     if (norm.kind === 'area'){
       if (multiPolygonContains(norm.polygons, guess.lon, guess.lat)) return { km: 0, inside: true, nearest: null };
       const nearest = nearestOnPolygons(norm.polygons, guess.lat, guess.lon);
