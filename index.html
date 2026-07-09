@@ -104,7 +104,8 @@
   <div class="panel center-panel" id="landing-panel">
     <label>Saved groups</label>
     <div class="guesser-list" id="saved-sessions-list"></div>
-    <button class="btn full" id="create-session-btn" style="margin-top:14px;">Create a new game</button>
+    <button class="btn full" id="create-session-btn" style="margin-top:14px;">🌍 Play Challenge Mode</button>
+    <button class="btn ghost full" id="custom-round-btn" style="margin-top:10px;">✏️ Custom Round (your own location)</button>
     <div class="hint" style="margin:14px 0 8px;">— or join with a code —</div>
     <div class="search-row">
       <input id="join-code-input" type="text" placeholder="Enter game code" autocomplete="off" style="text-transform:uppercase;">
@@ -119,6 +120,7 @@
       <input id="prompt-input" type="text" placeholder="e.g. My hometown, or Where we went on vacation" autocomplete="off">
     </div>
     <button class="btn ghost full" id="prompt-random-btn" style="margin-top:10px;">🎲 Pick a random location for me</button>
+    <div class="hint" id="reroll-cost-hint" style="display:none;color:var(--sky-dark);font-weight:600;"></div>
     <div class="hint">Guessers will see this exact text while they guess, but the real place stays hidden until everyone's placed a pin.</div>
     <button class="btn full" id="prompt-continue-btn" style="margin-top:14px;" disabled>Create game</button>
   </div>
@@ -136,7 +138,7 @@
     <div class="guesser-list" id="waiting-list"></div>
     <div class="hint" id="waiting-hint">Waiting for the host to start the round.</div>
     <button class="btn full" id="host-start-btn" style="margin-top:14px;display:none;" disabled>Start guessing</button>
-    <div style="margin-top:14px;">
+    <div style="margin-top:14px;" id="save-group-section">
       <label>Save this group for next time</label>
       <div class="search-row">
         <input id="save-session-name-input" type="text" placeholder="e.g. Friday game night" autocomplete="off">
@@ -158,8 +160,8 @@
   </div>
 
   <div class="panel center-panel" id="waiting-newprompt-panel" style="display:none;">
-    <label>Round over!</label>
-    <div class="hint">Waiting for the host to set up the next round...</div>
+    <label>Get ready!</label>
+    <div class="hint" id="waiting-newprompt-hint">Waiting for the next location to be picked...</div>
   </div>
 
   <div class="panel center-panel" id="waiting-reveal-panel" style="display:none;">
@@ -172,19 +174,28 @@
   </div>
   <div class="bottombar" id="bottombar" style="display:none;">
     <div class="lockin">
+      <button class="btn ghost small" id="clue-btn" style="display:none;flex:0 0 auto;">🔍 Clue -50</button>
       <button class="btn ghost" id="clear-pin-btn" style="flex:0 0 auto;">Clear pin</button>
       <button class="btn full" id="lock-btn" disabled>Confirm guess</button>
     </div>
   </div>
 
   <div class="panel reveal-card" id="reveal-card" style="display:none;">
+    <div id="gameover-banner" style="display:none;text-align:center;margin-bottom:14px;">
+      <div style="font-family:'Fraunces',serif;font-weight:700;font-size:20px;color:var(--gold);">🏆 Game Over!</div>
+      <div class="hint" id="gameover-text" style="margin-top:4px;"></div>
+    </div>
+    <div class="hint" id="tiebreaker-pending-text" style="display:none;text-align:center;color:var(--sky-dark);font-weight:600;margin-bottom:10px;"></div>
     <div class="reveal-head"><h2>Results</h2><button class="btn ghost small" id="km-mi-btn">km</button></div>
     <div class="actual-label">Actual location: <b id="actual-name">—</b></div>
     <div class="leaderboard" id="leaderboard"></div>
-    <div class="reveal-head" style="margin-top:16px;"><h2>Total Points</h2></div>
-    <div class="leaderboard" id="total-leaderboard"></div>
+    <div id="total-points-section" style="margin-top:16px;">
+      <div class="reveal-head"><h2>Total Points</h2></div>
+      <div class="leaderboard" id="total-leaderboard"></div>
+    </div>
     <div class="reveal-actions">
       <button class="btn ghost" id="leave-btn">Leave game</button>
+      <button class="btn full" id="tiebreaker-btn" style="display:none;">⚔️ Start Tiebreaker Round</button>
       <button class="btn full" id="again-btn" style="display:none;">New round</button>
     </div>
   </div>
@@ -269,57 +280,206 @@ const firebaseConfig = {
 
   const PIN_COLORS = ['#1f3a5f', '#c1652f', '#3f8f6c', '#8a4fae', '#c9a23d', '#c0447a', '#2f8fa3', '#7a5230'];
   const RANDOM_LOCATIONS = [
-    { name: 'Eiffel Tower', category: 'Landmark' }, { name: 'Statue of Liberty', category: 'Landmark' },
-    { name: 'Great Wall of China', category: 'Landmark' }, { name: 'Machu Picchu', category: 'Landmark' },
-    { name: 'Colosseum', category: 'Landmark' }, { name: 'Taj Mahal', category: 'Landmark' },
-    { name: 'Christ the Redeemer', category: 'Landmark' }, { name: 'Sydney Opera House', category: 'Landmark' },
-    { name: 'Big Ben', category: 'Landmark' }, { name: 'Mount Rushmore', category: 'Landmark' },
-    { name: 'Golden Gate Bridge', category: 'Landmark' }, { name: 'Great Pyramid of Giza', category: 'Landmark' },
-    { name: 'Stonehenge', category: 'Landmark' }, { name: 'Petra', category: 'Landmark' },
-    { name: 'Angkor Wat', category: 'Landmark' }, { name: 'Mount Everest', category: 'Landmark' },
-    { name: 'Niagara Falls', category: 'Landmark' }, { name: 'Sagrada Familia', category: 'Landmark' },
-    { name: 'Burj Khalifa', category: 'Landmark' }, { name: 'Acropolis of Athens', category: 'Landmark' },
-    { name: 'Leaning Tower of Pisa', category: 'Landmark' }, { name: 'Neuschwanstein Castle', category: 'Landmark' },
-    { name: 'Chichen Itza', category: 'Landmark' }, { name: 'Table Mountain', category: 'Landmark' },
-    { name: 'CN Tower', category: 'Landmark' }, { name: 'Empire State Building', category: 'Landmark' },
-    { name: 'Hollywood Sign', category: 'Landmark' }, { name: 'Mount Fuji', category: 'Landmark' },
-    { name: 'Uluru', category: 'Landmark' }, { name: 'Victoria Falls', category: 'Landmark' },
-    { name: 'Japan', category: 'Country' }, { name: 'Brazil', category: 'Country' },
-    { name: 'Kenya', category: 'Country' }, { name: 'New Zealand', category: 'Country' },
-    { name: 'Iceland', category: 'Country' }, { name: 'Egypt', category: 'Country' },
-    { name: 'Peru', category: 'Country' }, { name: 'Norway', category: 'Country' },
-    { name: 'Thailand', category: 'Country' }, { name: 'Argentina', category: 'Country' },
-    { name: 'Morocco', category: 'Country' }, { name: 'Vietnam', category: 'Country' },
-    { name: 'Portugal', category: 'Country' }, { name: 'Greece', category: 'Country' },
-    { name: 'Mongolia', category: 'Country' }, { name: 'Canada', category: 'Country' },
-    { name: 'Australia', category: 'Country' }, { name: 'India', category: 'Country' },
-    { name: 'Switzerland', category: 'Country' }, { name: 'Chile', category: 'Country' },
-    { name: 'Tanzania', category: 'Country' }, { name: 'Indonesia', category: 'Country' },
-    { name: 'Ireland', category: 'Country' }, { name: 'Finland', category: 'Country' },
-    { name: 'Croatia', category: 'Country' },
-    { name: 'Tokyo', category: 'City' }, { name: 'Paris', category: 'City' },
-    { name: 'Cairo', category: 'City' }, { name: 'Reykjavik', category: 'City' },
-    { name: 'Buenos Aires', category: 'City' }, { name: 'Marrakesh', category: 'City' },
-    { name: 'Bangkok', category: 'City' }, { name: 'Nairobi', category: 'City' },
-    { name: 'Lisbon', category: 'City' }, { name: 'Athens', category: 'City' },
-    { name: 'Rome', category: 'City' }, { name: 'London', category: 'City' },
-    { name: 'Barcelona', category: 'City' }, { name: 'Dubai', category: 'City' },
-    { name: 'Singapore', category: 'City' }, { name: 'Rio de Janeiro', category: 'City' },
-    { name: 'Vienna', category: 'City' }, { name: 'Amsterdam', category: 'City' },
-    { name: 'Istanbul', category: 'City' }, { name: 'Seoul', category: 'City' },
-    { name: 'Mexico City', category: 'City' }, { name: 'Cape Town', category: 'City' },
-    { name: 'Kyoto', category: 'City' }, { name: 'Prague', category: 'City' },
-    { name: 'Havana', category: 'City' },
-    { name: 'Amazon River', category: 'Body of Water' }, { name: 'Lake Victoria', category: 'Body of Water' },
-    { name: 'Dead Sea', category: 'Body of Water' }, { name: 'Caspian Sea', category: 'Body of Water' },
-    { name: 'Mediterranean Sea', category: 'Body of Water' }, { name: 'Lake Baikal', category: 'Body of Water' },
-    { name: 'Bay of Bengal', category: 'Body of Water' }, { name: 'Persian Gulf', category: 'Body of Water' },
-    { name: 'Gulf of Mexico', category: 'Body of Water' }, { name: 'Lake Titicaca', category: 'Body of Water' },
-    { name: 'Nile River', category: 'Body of Water' }, { name: 'Lake Superior', category: 'Body of Water' },
-    { name: 'Red Sea', category: 'Body of Water' }, { name: 'Black Sea', category: 'Body of Water' },
-    { name: 'English Channel', category: 'Body of Water' }, { name: 'Yangtze River', category: 'Body of Water' },
-    { name: 'Lake Tanganyika', category: 'Body of Water' }, { name: 'Adriatic Sea', category: 'Body of Water' },
-    { name: 'Ganges River', category: 'Body of Water' }, { name: 'Baltic Sea', category: 'Body of Water' }
+    { name: 'Eiffel Tower', category: 'Landmark', continent: 'Europe' },
+    { name: 'Statue of Liberty', category: 'Landmark', continent: 'North America' },
+    { name: 'Great Wall of China', category: 'Landmark', continent: 'Asia' },
+    { name: 'Machu Picchu', category: 'Landmark', continent: 'South America' },
+    { name: 'Colosseum', category: 'Landmark', continent: 'Europe' },
+    { name: 'Taj Mahal', category: 'Landmark', continent: 'Asia' },
+    { name: 'Christ the Redeemer', category: 'Landmark', continent: 'South America' },
+    { name: 'Sydney Opera House', category: 'Landmark', continent: 'Oceania' },
+    { name: 'Big Ben', category: 'Landmark', continent: 'Europe' },
+    { name: 'Mount Rushmore', category: 'Landmark', continent: 'North America' },
+    { name: 'Golden Gate Bridge', category: 'Landmark', continent: 'North America' },
+    { name: 'Great Pyramid of Giza', category: 'Landmark', continent: 'Africa' },
+    { name: 'Stonehenge', category: 'Landmark', continent: 'Europe' },
+    { name: 'Petra', category: 'Landmark', continent: 'Asia' },
+    { name: 'Angkor Wat', category: 'Landmark', continent: 'Asia' },
+    { name: 'Mount Everest', category: 'Landmark', continent: 'Asia' },
+    { name: 'Niagara Falls', category: 'Landmark', continent: 'North America' },
+    { name: 'Sagrada Familia', category: 'Landmark', continent: 'Europe' },
+    { name: 'Burj Khalifa', category: 'Landmark', continent: 'Asia' },
+    { name: 'Acropolis of Athens', category: 'Landmark', continent: 'Europe' },
+    { name: 'Leaning Tower of Pisa', category: 'Landmark', continent: 'Europe' },
+    { name: 'Neuschwanstein Castle', category: 'Landmark', continent: 'Europe' },
+    { name: 'Chichen Itza', category: 'Landmark', continent: 'North America' },
+    { name: 'Table Mountain', category: 'Landmark', continent: 'Africa' },
+    { name: 'CN Tower', category: 'Landmark', continent: 'North America' },
+    { name: 'Empire State Building', category: 'Landmark', continent: 'North America' },
+    { name: 'Hollywood Sign', category: 'Landmark', continent: 'North America' },
+    { name: 'Mount Fuji', category: 'Landmark', continent: 'Asia' },
+    { name: 'Uluru', category: 'Landmark', continent: 'Oceania' },
+    { name: 'Victoria Falls', category: 'Landmark', continent: 'Africa' },
+    { name: 'Petronas Towers', category: 'Landmark', continent: 'Asia' },
+    { name: 'Forbidden City', category: 'Landmark', continent: 'Asia' },
+    { name: 'Blue Mosque', category: 'Landmark', continent: 'Europe' },
+    { name: 'Robben Island', category: 'Landmark', continent: 'Africa' },
+    { name: 'Potala Palace', category: 'Landmark', continent: 'Asia' },
+    { name: 'Borobudur', category: 'Landmark', continent: 'Asia' },
+    { name: 'Alhambra', category: 'Landmark', continent: 'Europe' },
+    { name: 'Registan', category: 'Landmark', continent: 'Asia' },
+    { name: 'Easter Island', category: 'Landmark', continent: 'Oceania' },
+    { name: 'Perito Moreno Glacier', category: 'Landmark', continent: 'South America' },
+    { name: 'Marina Bay Sands', category: 'Landmark', continent: 'Asia' },
+    { name: 'Sheikh Zayed Grand Mosque', category: 'Landmark', continent: 'Asia' },
+    { name: 'Meteora', category: 'Landmark', continent: 'Europe' },
+    { name: 'Salar de Uyuni', category: 'Landmark', continent: 'South America' },
+    { name: "Giant's Causeway", category: 'Landmark', continent: 'Europe' },
+    { name: 'Palace of Versailles', category: 'Landmark', continent: 'Europe' },
+    { name: 'Mount Kilimanjaro', category: 'Landmark', continent: 'Africa' },
+    { name: 'Japan', category: 'Country', continent: 'Asia' },
+    { name: 'Brazil', category: 'Country', continent: 'South America' },
+    { name: 'Kenya', category: 'Country', continent: 'Africa' },
+    { name: 'New Zealand', category: 'Country', continent: 'Oceania' },
+    { name: 'Iceland', category: 'Country', continent: 'Europe' },
+    { name: 'Egypt', category: 'Country', continent: 'Africa' },
+    { name: 'Peru', category: 'Country', continent: 'South America' },
+    { name: 'Norway', category: 'Country', continent: 'Europe' },
+    { name: 'Thailand', category: 'Country', continent: 'Asia' },
+    { name: 'Argentina', category: 'Country', continent: 'South America' },
+    { name: 'Morocco', category: 'Country', continent: 'Africa' },
+    { name: 'Vietnam', category: 'Country', continent: 'Asia' },
+    { name: 'Portugal', category: 'Country', continent: 'Europe' },
+    { name: 'Greece', category: 'Country', continent: 'Europe' },
+    { name: 'Mongolia', category: 'Country', continent: 'Asia' },
+    { name: 'Canada', category: 'Country', continent: 'North America' },
+    { name: 'Australia', category: 'Country', continent: 'Oceania' },
+    { name: 'India', category: 'Country', continent: 'Asia' },
+    { name: 'Switzerland', category: 'Country', continent: 'Europe' },
+    { name: 'Chile', category: 'Country', continent: 'South America' },
+    { name: 'Tanzania', category: 'Country', continent: 'Africa' },
+    { name: 'Indonesia', category: 'Country', continent: 'Asia' },
+    { name: 'Ireland', category: 'Country', continent: 'Europe' },
+    { name: 'Finland', category: 'Country', continent: 'Europe' },
+    { name: 'Croatia', category: 'Country', continent: 'Europe' },
+    { name: 'Nigeria', category: 'Country', continent: 'Africa' },
+    { name: 'Ghana', category: 'Country', continent: 'Africa' },
+    { name: 'Ethiopia', category: 'Country', continent: 'Africa' },
+    { name: 'Zambia', category: 'Country', continent: 'Africa' },
+    { name: 'Namibia', category: 'Country', continent: 'Africa' },
+    { name: 'Rwanda', category: 'Country', continent: 'Africa' },
+    { name: 'Madagascar', category: 'Country', continent: 'Africa' },
+    { name: 'Senegal', category: 'Country', continent: 'Africa' },
+    { name: 'Sri Lanka', category: 'Country', continent: 'Asia' },
+    { name: 'Nepal', category: 'Country', continent: 'Asia' },
+    { name: 'Myanmar', category: 'Country', continent: 'Asia' },
+    { name: 'Cambodia', category: 'Country', continent: 'Asia' },
+    { name: 'Philippines', category: 'Country', continent: 'Asia' },
+    { name: 'Malaysia', category: 'Country', continent: 'Asia' },
+    { name: 'Fiji', category: 'Country', continent: 'Oceania' },
+    { name: 'Jamaica', category: 'Country', continent: 'North America' },
+    { name: 'Costa Rica', category: 'Country', continent: 'North America' },
+    { name: 'Colombia', category: 'Country', continent: 'South America' },
+    { name: 'Ecuador', category: 'Country', continent: 'South America' },
+    { name: 'Bolivia', category: 'Country', continent: 'South America' },
+    { name: 'Kazakhstan', category: 'Country', continent: 'Asia' },
+    { name: 'Georgia', category: 'Country', continent: 'Europe' },
+    { name: 'Jordan', category: 'Country', continent: 'Asia' },
+    { name: 'Oman', category: 'Country', continent: 'Asia' },
+    { name: 'Spain', category: 'Country', continent: 'Europe' },
+    { name: 'Germany', category: 'Country', continent: 'Europe' },
+    { name: 'Poland', category: 'Country', continent: 'Europe' },
+    { name: 'Turkey', category: 'Country', continent: 'Asia' },
+    { name: 'South Africa', category: 'Country', continent: 'Africa' },
+    { name: 'Botswana', category: 'Country', continent: 'Africa' },
+    { name: 'Uganda', category: 'Country', continent: 'Africa' },
+    { name: 'Pakistan', category: 'Country', continent: 'Asia' },
+    { name: 'Bangladesh', category: 'Country', continent: 'Asia' },
+    { name: 'Laos', category: 'Country', continent: 'Asia' },
+    { name: 'Cuba', category: 'Country', continent: 'North America' },
+    { name: 'Bhutan', category: 'Country', continent: 'Asia' },
+    { name: 'Tokyo', category: 'City', continent: 'Asia' },
+    { name: 'Paris', category: 'City', continent: 'Europe' },
+    { name: 'Cairo', category: 'City', continent: 'Africa' },
+    { name: 'Reykjavik', category: 'City', continent: 'Europe' },
+    { name: 'Buenos Aires', category: 'City', continent: 'South America' },
+    { name: 'Marrakesh', category: 'City', continent: 'Africa' },
+    { name: 'Bangkok', category: 'City', continent: 'Asia' },
+    { name: 'Nairobi', category: 'City', continent: 'Africa' },
+    { name: 'Lisbon', category: 'City', continent: 'Europe' },
+    { name: 'Athens', category: 'City', continent: 'Europe' },
+    { name: 'Rome', category: 'City', continent: 'Europe' },
+    { name: 'London', category: 'City', continent: 'Europe' },
+    { name: 'Barcelona', category: 'City', continent: 'Europe' },
+    { name: 'Dubai', category: 'City', continent: 'Asia' },
+    { name: 'Singapore', category: 'City', continent: 'Asia' },
+    { name: 'Rio de Janeiro', category: 'City', continent: 'South America' },
+    { name: 'Vienna', category: 'City', continent: 'Europe' },
+    { name: 'Amsterdam', category: 'City', continent: 'Europe' },
+    { name: 'Istanbul', category: 'City', continent: 'Europe' },
+    { name: 'Seoul', category: 'City', continent: 'Asia' },
+    { name: 'Mexico City', category: 'City', continent: 'North America' },
+    { name: 'Cape Town', category: 'City', continent: 'Africa' },
+    { name: 'Kyoto', category: 'City', continent: 'Asia' },
+    { name: 'Prague', category: 'City', continent: 'Europe' },
+    { name: 'Havana', category: 'City', continent: 'North America' },
+    { name: 'Lagos', category: 'City', continent: 'Africa' },
+    { name: 'Accra', category: 'City', continent: 'Africa' },
+    { name: 'Addis Ababa', category: 'City', continent: 'Africa' },
+    { name: 'Kigali', category: 'City', continent: 'Africa' },
+    { name: 'Antananarivo', category: 'City', continent: 'Africa' },
+    { name: 'Dakar', category: 'City', continent: 'Africa' },
+    { name: 'Colombo', category: 'City', continent: 'Asia' },
+    { name: 'Kathmandu', category: 'City', continent: 'Asia' },
+    { name: 'Yangon', category: 'City', continent: 'Asia' },
+    { name: 'Manila', category: 'City', continent: 'Asia' },
+    { name: 'Kuala Lumpur', category: 'City', continent: 'Asia' },
+    { name: 'Suva', category: 'City', continent: 'Oceania' },
+    { name: 'Kingston', category: 'City', continent: 'North America' },
+    { name: 'San Jose', category: 'City', continent: 'North America' },
+    { name: 'Bogota', category: 'City', continent: 'South America' },
+    { name: 'Quito', category: 'City', continent: 'South America' },
+    { name: 'La Paz', category: 'City', continent: 'South America' },
+    { name: 'Almaty', category: 'City', continent: 'Asia' },
+    { name: 'Tbilisi', category: 'City', continent: 'Europe' },
+    { name: 'Amman', category: 'City', continent: 'Asia' },
+    { name: 'Muscat', category: 'City', continent: 'Asia' },
+    { name: 'Madrid', category: 'City', continent: 'Europe' },
+    { name: 'Berlin', category: 'City', continent: 'Europe' },
+    { name: 'Warsaw', category: 'City', continent: 'Europe' },
+    { name: 'Johannesburg', category: 'City', continent: 'Africa' },
+    { name: 'Gaborone', category: 'City', continent: 'Africa' },
+    { name: 'Kampala', category: 'City', continent: 'Africa' },
+    { name: 'Karachi', category: 'City', continent: 'Asia' },
+    { name: 'Dhaka', category: 'City', continent: 'Asia' },
+    { name: 'Vientiane', category: 'City', continent: 'Asia' },
+    { name: 'Thimphu', category: 'City', continent: 'Asia' },
+    { name: 'Toronto', category: 'City', continent: 'North America' },
+    { name: 'Amazon River', category: 'Body of Water', continent: 'South America' },
+    { name: 'Lake Victoria', category: 'Body of Water', continent: 'Africa' },
+    { name: 'Dead Sea', category: 'Body of Water', continent: 'Asia' },
+    { name: 'Caspian Sea', category: 'Body of Water', continent: 'Asia' },
+    { name: 'Mediterranean Sea', category: 'Body of Water', continent: 'Europe' },
+    { name: 'Lake Baikal', category: 'Body of Water', continent: 'Asia' },
+    { name: 'Bay of Bengal', category: 'Body of Water', continent: 'Asia' },
+    { name: 'Persian Gulf', category: 'Body of Water', continent: 'Asia' },
+    { name: 'Gulf of Mexico', category: 'Body of Water', continent: 'North America' },
+    { name: 'Lake Titicaca', category: 'Body of Water', continent: 'South America' },
+    { name: 'Nile River', category: 'Body of Water', continent: 'Africa' },
+    { name: 'Lake Superior', category: 'Body of Water', continent: 'North America' },
+    { name: 'Red Sea', category: 'Body of Water', continent: 'Africa' },
+    { name: 'Black Sea', category: 'Body of Water', continent: 'Europe' },
+    { name: 'English Channel', category: 'Body of Water', continent: 'Europe' },
+    { name: 'Yangtze River', category: 'Body of Water', continent: 'Asia' },
+    { name: 'Lake Tanganyika', category: 'Body of Water', continent: 'Africa' },
+    { name: 'Adriatic Sea', category: 'Body of Water', continent: 'Europe' },
+    { name: 'Ganges River', category: 'Body of Water', continent: 'Asia' },
+    { name: 'Baltic Sea', category: 'Body of Water', continent: 'Europe' },
+    { name: 'Ha Long Bay', category: 'Body of Water', continent: 'Asia' },
+    { name: 'Lake Malawi', category: 'Body of Water', continent: 'Africa' },
+    { name: 'Congo River', category: 'Body of Water', continent: 'Africa' },
+    { name: 'Mekong River', category: 'Body of Water', continent: 'Asia' },
+    { name: 'Bering Strait', category: 'Body of Water', continent: 'North America' },
+    { name: 'Coral Sea', category: 'Body of Water', continent: 'Oceania' },
+    { name: 'Gulf of Aden', category: 'Body of Water', continent: 'Africa' },
+    { name: 'Java Sea', category: 'Body of Water', continent: 'Asia' },
+    { name: 'Lake Tahoe', category: 'Body of Water', continent: 'North America' },
+    { name: 'Loch Ness', category: 'Body of Water', continent: 'Europe' },
+    { name: 'Strait of Gibraltar', category: 'Body of Water', continent: 'Europe' },
+    { name: 'Andaman Sea', category: 'Body of Water', continent: 'Asia' },
+    { name: 'Gulf of Alaska', category: 'Body of Water', continent: 'North America' },
+    { name: 'Sea of Japan', category: 'Body of Water', continent: 'Asia' },
+    { name: 'Lake Como', category: 'Body of Water', continent: 'Europe' }
   ];
 
   function shuffleArray(arr){
@@ -363,21 +523,27 @@ const firebaseConfig = {
     for (let i = 0; i < 6; i++) code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
     return code;
   }
-  function createSessionDoc(promptText, hostClientId){
-    return { promptText, hostClientId, stage: 'roster', guessers: [], currentIdx: 0, actual: null };
+  function createSessionDoc(promptText, hostClientId, mode, promptContinent){
+    return { promptText, hostClientId, stage: 'roster', guessers: [], currentIdx: 0, actual: null, mode: mode || 'main', promptContinent: promptContinent || null, pickerClientId: null, pickerRerollCount: 0 };
   }
   function joinSessionLogic(sdoc, clientId, name){
     if (sdoc.stage !== 'roster') return { ok: false, reason: 'Round already in progress' };
     if (sdoc.guessers.some(g => g.clientId === clientId)) return { ok: false, reason: 'Already joined' };
-    const next = { ...sdoc, guessers: [...sdoc.guessers, { clientId, name, color: PIN_COLORS[sdoc.guessers.length % PIN_COLORS.length], guess: null, totalPoints: 0 }] };
+    const next = { ...sdoc, guessers: [...sdoc.guessers, { clientId, name, color: PIN_COLORS[sdoc.guessers.length % PIN_COLORS.length], guess: null, totalPoints: 0, usedClue: false }] };
     return { ok: true, doc: next };
   }
   function startGuessingLogic(sdoc, requestingClientId){
     if (requestingClientId !== sdoc.hostClientId) return { ok: false, reason: 'Only the host can start' };
     if (sdoc.guessers.length === 0) return { ok: false, reason: 'No players yet' };
-    return { ok: true, doc: { ...sdoc, stage: 'guessing', currentIdx: 0 } };
+    if (sdoc.mode === 'custom'){
+      return { ok: true, doc: { ...sdoc, stage: 'guessing', currentIdx: 0 } };
+    }
+    const randomIdx = Math.floor(Math.random() * sdoc.guessers.length);
+    const pickerClientId = sdoc.guessers[randomIdx].clientId;
+    return { ok: true, doc: { ...sdoc, stage: 'prompt', currentIdx: 0, pickerClientId, pickerRerollCount: 0 } };
   }
   function submitGuessLogic(sdoc, requestingClientId, guessLatLon){
+    if (sdoc.tiebreakerActive) return { ok: false, reason: 'A tiebreaker is in progress' };
     if (sdoc.stage !== 'guessing') return { ok: false, reason: 'Not currently guessing' };
     const current = sdoc.guessers[sdoc.currentIdx];
     if (!current || current.clientId !== requestingClientId) return { ok: false, reason: 'Not your turn' };
@@ -385,26 +551,114 @@ const firebaseConfig = {
     const isLast = sdoc.currentIdx === sdoc.guessers.length - 1;
     return { ok: true, doc: { ...sdoc, guessers, currentIdx: isLast ? sdoc.currentIdx : sdoc.currentIdx + 1, stage: isLast ? 'location' : 'guessing' } };
   }
+  const CLUE_COST = 50;
+  function useClueLogic(sdoc, requestingClientId){
+    if (sdoc.mode !== 'main') return { ok: false, reason: 'Clues are only available in Challenge Mode' };
+    if (sdoc.tiebreakerActive) return { ok: false, reason: 'Clues are not available during the tiebreaker' };
+    if (sdoc.stage !== 'guessing') return { ok: false, reason: 'Not currently guessing' };
+    const current = sdoc.guessers[sdoc.currentIdx];
+    if (!current || current.clientId !== requestingClientId) return { ok: false, reason: 'Not your turn' };
+    if (current.usedClue) return { ok: false, reason: 'Clue already used this round' };
+    const guessers = sdoc.guessers.map((g, i) => i === sdoc.currentIdx ? { ...g, usedClue: true } : g);
+    return { ok: true, doc: { ...sdoc, guessers } };
+  }
+  const GAME_OVER_THRESHOLD = 500;
+  const REROLL_COST = 20;
   function confirmLocationLogic(sdoc, requestingClientId, actualTarget){
     if (requestingClientId !== sdoc.hostClientId) return { ok: false, reason: 'Only the host can reveal the answer' };
     if (sdoc.stage !== 'location') return { ok: false, reason: 'Not ready to reveal yet' };
+    const rerollPenalty = (sdoc.pickerRerollCount || 0) * REROLL_COST;
     const guessers = sdoc.guessers.map(g => {
       const priorTotal = g.totalPoints || 0;
-      if (!g.guess) return { ...g, totalPoints: priorTotal };
+      const cluePenalty = g.usedClue ? CLUE_COST : 0;
+      const pickerPenalty = (g.clientId === sdoc.pickerClientId) ? rerollPenalty : 0;
+      if (!g.guess) return { ...g, totalPoints: priorTotal - cluePenalty - pickerPenalty };
       const score = scoreGuess(g.guess, actualTarget);
-      return { ...g, totalPoints: priorTotal + pointsForScore(score) };
+      return { ...g, totalPoints: priorTotal + pointsForScore(score) - cluePenalty - pickerPenalty };
     });
-    return { ok: true, doc: { ...sdoc, actual: actualTarget, stage: 'revealed', guessers } };
+    let gameOver = false, winners = [], tiebreakerPending = false, tiebreakerPlayerIds = [];
+    if (sdoc.mode === 'main'){
+      const maxPoints = Math.max(...guessers.map(g => g.totalPoints || 0));
+      if (maxPoints >= GAME_OVER_THRESHOLD){
+        const leaders = guessers.filter(g => (g.totalPoints || 0) === maxPoints).map(g => g.clientId);
+        if (leaders.length === 1){ gameOver = true; winners = leaders; }
+        else { tiebreakerPending = true; tiebreakerPlayerIds = leaders; }
+      }
+    }
+    return { ok: true, doc: { ...sdoc, actual: actualTarget, stage: 'revealed', guessers, gameOver, winners, tiebreakerPending, tiebreakerPlayerIds } };
   }
-  function submitNewPromptLogic(sdoc, requestingClientId, promptText){
-    if (requestingClientId !== sdoc.hostClientId) return { ok: false, reason: 'Only the host can set the next location' };
+
+  const TIEBREAKER_SECONDS = 20;
+  function startTiebreakerLogic(sdoc, requestingClientId){
+    if (requestingClientId !== sdoc.hostClientId) return { ok: false, reason: 'Only the host can start the tiebreaker' };
+    if (!sdoc.tiebreakerPending) return { ok: false, reason: 'No tiebreaker is pending' };
+    const randomIdx = Math.floor(Math.random() * sdoc.tiebreakerPlayerIds.length);
+    const pickerClientId = sdoc.tiebreakerPlayerIds[randomIdx];
+    return { ok: true, doc: { ...sdoc, stage: 'prompt', promptText: '', promptContinent: null,
+      tiebreakerActive: true, tiebreakerPending: false, tiebreakerIdx: 0, tiebreakerGuesses: {}, tiebreakerTimedOut: [],
+      tiebreakerDeadline: null, pickerClientId, pickerRerollCount: 0,
+      guessers: sdoc.guessers.map(g => ({ ...g, guess: null, usedClue: false })) } };
+  }
+  function submitTiebreakerGuessLogic(sdoc, requestingClientId, guessLatLon, nowMs){
+    if (!sdoc.tiebreakerActive) return { ok: false, reason: 'No active tiebreaker' };
+    if (sdoc.stage !== 'guessing') return { ok: false, reason: 'Not currently guessing' };
+    const currentId = sdoc.tiebreakerPlayerIds[sdoc.tiebreakerIdx];
+    if (currentId !== requestingClientId) return { ok: false, reason: 'Not your turn' };
+    if (sdoc.tiebreakerDeadline && nowMs > sdoc.tiebreakerDeadline) return { ok: false, reason: "Time's up — you're out" };
+    const tiebreakerGuesses = { ...sdoc.tiebreakerGuesses, [requestingClientId]: guessLatLon };
+    const nextIdx = sdoc.tiebreakerIdx + 1;
+    const done = nextIdx >= sdoc.tiebreakerPlayerIds.length;
+    return { ok: true, doc: { ...sdoc, tiebreakerGuesses, tiebreakerIdx: nextIdx,
+      tiebreakerDeadline: done ? null : nowMs + TIEBREAKER_SECONDS * 1000,
+      stage: done ? 'location' : 'guessing' } };
+  }
+  function tiebreakerTimeoutLogic(sdoc, requestingClientId, nowMs){
+    if (!sdoc.tiebreakerActive) return { ok: false, reason: 'No active tiebreaker' };
+    if (sdoc.stage !== 'guessing') return { ok: false, reason: 'Not currently guessing' };
+    if (!sdoc.tiebreakerDeadline || nowMs < sdoc.tiebreakerDeadline) return { ok: false, reason: 'Time has not expired yet' };
+    const currentId = sdoc.tiebreakerPlayerIds[sdoc.tiebreakerIdx];
+    if (!currentId) return { ok: false, reason: 'No current tiebreaker player' };
+    const tiebreakerTimedOut = [...sdoc.tiebreakerTimedOut, currentId];
+    const nextIdx = sdoc.tiebreakerIdx + 1;
+    const done = nextIdx >= sdoc.tiebreakerPlayerIds.length;
+    return { ok: true, doc: { ...sdoc, tiebreakerTimedOut, tiebreakerIdx: nextIdx,
+      tiebreakerDeadline: done ? null : nowMs + TIEBREAKER_SECONDS * 1000,
+      stage: done ? 'location' : 'guessing' } };
+  }
+  function confirmTiebreakerLogic(sdoc, requestingClientId, actualTarget){
+    if (requestingClientId !== sdoc.hostClientId) return { ok: false, reason: 'Only the host can reveal the answer' };
+    if (sdoc.stage !== 'location') return { ok: false, reason: 'Not ready to reveal yet' };
+    const contenders = sdoc.tiebreakerPlayerIds.filter(id => !sdoc.tiebreakerTimedOut.includes(id));
+    let winners;
+    if (contenders.length === 0){
+      winners = sdoc.tiebreakerPlayerIds.slice();
+    } else {
+      const scored = contenders.map(id => {
+        const g = sdoc.tiebreakerGuesses[id];
+        const score = scoreGuess(g, actualTarget);
+        return { id, km: score.inside ? 0 : score.km };
+      });
+      const minKm = Math.min(...scored.map(s => s.km));
+      winners = scored.filter(s => s.km === minKm).map(s => s.id);
+    }
+    return { ok: true, doc: { ...sdoc, actual: actualTarget, stage: 'revealed', gameOver: true, winners,
+      tiebreakerPending: false, tiebreakerActive: false, tiebreakerResolved: true } };
+  }
+  function submitNewPromptLogic(sdoc, requestingClientId, promptText, promptContinent, rerollCount){
+    if (requestingClientId !== sdoc.pickerClientId) return { ok: false, reason: 'Only the chosen picker can set the location' };
     if (sdoc.stage !== 'prompt') return { ok: false, reason: 'Not ready for a new prompt yet' };
-    return { ok: true, doc: { ...sdoc, promptText, stage: 'guessing', currentIdx: 0 } };
+    return { ok: true, doc: { ...sdoc, promptText, promptContinent: promptContinent || null, stage: 'guessing', currentIdx: 0,
+      pickerRerollCount: rerollCount || 0 } };
   }
   function resetForNewRoundLogic(sdoc, requestingClientId){
     if (requestingClientId !== sdoc.hostClientId) return { ok: false, reason: 'Only the host can start a new round' };
-    return { ok: true, doc: { ...sdoc, stage: 'prompt', promptText: '', currentIdx: 0, actual: null,
-      guessers: sdoc.guessers.map(g => ({ ...g, guess: null })) } };
+    if (sdoc.gameOver) return { ok: false, reason: 'This game has ended — leave to start a new one' };
+    if (sdoc.tiebreakerPending) return { ok: false, reason: 'Resolve the tiebreaker first' };
+    const randomIdx = Math.floor(Math.random() * sdoc.guessers.length);
+    const pickerClientId = sdoc.guessers[randomIdx].clientId;
+    return { ok: true, doc: { ...sdoc, stage: 'prompt', promptText: '', promptContinent: null, currentIdx: 0, actual: null,
+      pickerClientId, pickerRerollCount: 0,
+      guessers: sdoc.guessers.map(g => ({ ...g, guess: null, usedClue: false })) } };
   }
 
   let sessionCode = null;
@@ -470,9 +724,55 @@ const firebaseConfig = {
   let isHost = false;
   let isRandomPrompt = false;
   let randomSearchQuery = '';
+  let randomContinent = '';
+  let rerollCount = 0;
   let autoLocationSearchDone = false;
+  let pendingMode = 'main';
 
-  createSessionBtn.addEventListener('click', () => {
+  function configurePromptPanelForMode(mode, isFirstRound){
+    isRandomPrompt = false;
+    randomSearchQuery = '';
+    randomContinent = '';
+    rerollCount = 0;
+    document.getElementById('reroll-cost-hint').style.display = 'none';
+    promptInput.value = '';
+    if (mode === 'main'){
+      promptRandomBtn.style.display = 'block';
+      promptInput.readOnly = true;
+      promptInput.placeholder = 'Tap "Pick a random location" below';
+      promptContinueBtn.textContent = isFirstRound ? 'Start game' : 'Start next round';
+    } else {
+      promptRandomBtn.style.display = 'none';
+      promptInput.readOnly = false;
+      promptInput.placeholder = 'e.g. My hometown, or Where we went on vacation';
+      promptContinueBtn.textContent = 'Start round';
+    }
+    updatePromptContinueState();
+  }
+
+  createSessionBtn.addEventListener('click', async () => {
+    pendingMode = 'main';
+    createSessionBtn.disabled = true;
+    createSessionBtn.textContent = 'Creating…';
+    try {
+      const code = generateSessionCode();
+      const ref = doc(db, 'sessions', code);
+      await setDoc(ref, createSessionDoc('', CLIENT_ID, 'main', null));
+      sessionCode = code;
+      sessionDocRef = ref;
+      isHost = true;
+      subscribeToSession();
+    } catch (err) {
+      showError('Could not create the game: ' + err.message);
+    }
+    createSessionBtn.disabled = false;
+    createSessionBtn.textContent = '🌍 Play Challenge Mode';
+  });
+
+  const customRoundBtn = document.getElementById('custom-round-btn');
+  customRoundBtn.addEventListener('click', () => {
+    pendingMode = 'custom';
+    configurePromptPanelForMode('custom');
     setLocalView('prompt');
   });
 
@@ -614,14 +914,26 @@ const firebaseConfig = {
   promptInput.addEventListener('input', () => {
     isRandomPrompt = false;
     randomSearchQuery = '';
+    randomContinent = '';
+    rerollCount = 0;
+    document.getElementById('reroll-cost-hint').style.display = 'none';
     updatePromptContinueState();
   });
   promptInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !promptContinueBtn.disabled) promptContinueBtn.click(); });
   promptRandomBtn.addEventListener('click', () => {
+    if (isRandomPrompt) rerollCount++;
     const pick = nextRandomLocation();
     promptInput.value = `${pick.name} - ${pick.category}`;
     isRandomPrompt = true;
     randomSearchQuery = pick.name;
+    randomContinent = pick.continent;
+    const rerollHint = document.getElementById('reroll-cost-hint');
+    if (rerollCount > 0){
+      rerollHint.textContent = `Re-rolled ${rerollCount} time${rerollCount > 1 ? 's' : ''} — will cost you ${rerollCount * 20} pts this round.`;
+      rerollHint.style.display = 'block';
+    } else {
+      rerollHint.style.display = 'none';
+    }
     updatePromptContinueState();
   });
 
@@ -632,9 +944,8 @@ const firebaseConfig = {
 
     if (sessionDocRef){
       promptContinueBtn.textContent = 'Starting…';
-      const ok = await runOnSession(submitNewPromptLogic, CLIENT_ID, text);
+      const ok = await runOnSession(submitNewPromptLogic, CLIENT_ID, text, randomContinent || null, rerollCount);
       promptInput.value = '';
-      promptContinueBtn.textContent = 'Create game';
       if (!ok) promptContinueBtn.disabled = false;
       return;
     }
@@ -643,7 +954,7 @@ const firebaseConfig = {
     try {
       const code = generateSessionCode();
       const ref = doc(db, 'sessions', code);
-      await setDoc(ref, createSessionDoc(text, CLIENT_ID));
+      await setDoc(ref, createSessionDoc(text, CLIENT_ID, pendingMode, randomContinent || null));
       sessionCode = code;
       sessionDocRef = ref;
       isHost = true;
@@ -651,7 +962,7 @@ const firebaseConfig = {
     } catch (err) {
       showError('Could not create the game: ' + err.message);
       promptContinueBtn.disabled = false;
-      promptContinueBtn.textContent = 'Create game';
+      promptContinueBtn.textContent = 'Start round';
     }
   });
 
@@ -667,7 +978,7 @@ const firebaseConfig = {
         await navigator.clipboard.writeText(url);
         copied = true;
       }
-    } catch (e) { /* fall through to legacy method below */ }
+    } catch (e) { }
     if (!copied){
       try {
         const ta = document.createElement('textarea');
@@ -680,7 +991,7 @@ const firebaseConfig = {
         document.execCommand('copy');
         document.body.removeChild(ta);
         copied = true;
-      } catch (e) { /* both copy methods failed */ }
+      } catch (e) { }
     }
     copyLinkBtn.textContent = copied ? '✓ Link copied!' : ('Copy failed — code: ' + sessionCode);
     setTimeout(() => { copyLinkBtn.textContent = originalText; }, 2500);
@@ -731,11 +1042,46 @@ const firebaseConfig = {
     lockBtn.disabled = false;
   });
   clearPinBtn.addEventListener('click', () => { tempGuess = null; clearTempMarker(); lockBtn.disabled = true; });
+  const clueBtn = document.getElementById('clue-btn');
+  clueBtn.addEventListener('click', async () => {
+    clueBtn.disabled = true;
+    const ok = await runOnSession(useClueLogic, CLIENT_ID);
+    if (!ok) clueBtn.disabled = false;
+  });
+
+  const tiebreakerBtn = document.getElementById('tiebreaker-btn');
+  tiebreakerBtn.addEventListener('click', async () => {
+    tiebreakerBtn.disabled = true;
+    promptInput.value = '';
+    const ok = await runOnSession(startTiebreakerLogic, CLIENT_ID);
+    if (!ok) tiebreakerBtn.disabled = false;
+  });
+
+  let firingTiebreakerTimeout = false;
+  setInterval(() => {
+    if (!latestDoc || !latestDoc.tiebreakerActive || latestDoc.stage !== 'guessing') return;
+    const deadline = latestDoc.tiebreakerDeadline;
+    if (!deadline) return;
+    const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+    const timerEl = document.getElementById('tb-timer');
+    if (timerEl) timerEl.textContent = `(${remaining}s)`;
+    if (remaining <= 0 && !firingTiebreakerTimeout){
+      const currentId = latestDoc.tiebreakerPlayerIds[latestDoc.tiebreakerIdx];
+      const amCurrentOrHost = currentId === CLIENT_ID || isHost;
+      if (amCurrentOrHost){
+        firingTiebreakerTimeout = true;
+        runOnSession(tiebreakerTimeoutLogic, CLIENT_ID, Date.now()).finally(() => { firingTiebreakerTimeout = false; });
+      }
+    }
+  }, 500);
   lockBtn.addEventListener('click', async () => {
     if (!tempGuess) return;
     lockBtn.disabled = true;
     lockBtn.textContent = 'Submitting…';
-    const ok = await runOnSession(submitGuessLogic, CLIENT_ID, tempGuess);
+    const inTiebreaker = latestDoc && latestDoc.tiebreakerActive;
+    const ok = inTiebreaker
+      ? await runOnSession(submitTiebreakerGuessLogic, CLIENT_ID, tempGuess, Date.now())
+      : await runOnSession(submitGuessLogic, CLIENT_ID, tempGuess);
     if (ok){
       tempGuess = null; clearTempMarker();
     } else {
@@ -795,7 +1141,8 @@ const firebaseConfig = {
       if (bboxPoly) geometryJSON = JSON.stringify(bboxPoly);
     }
     const actualTarget = { lat: parseFloat(r.lat), lon: parseFloat(r.lon), name: r.display_name, geometryJSON };
-    await runOnSession(confirmLocationLogic, CLIENT_ID, actualTarget);
+    const inTiebreaker = latestDoc && latestDoc.tiebreakerActive;
+    await runOnSession(inTiebreaker ? confirmTiebreakerLogic : confirmLocationLogic, CLIENT_ID, actualTarget);
   }
   searchBtn.addEventListener('click', doSearch);
   input.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
@@ -893,7 +1240,7 @@ const firebaseConfig = {
     }
     return coords;
   }
-  const LANDMARK_CIRCLE_RADIUS_KM = 0.04572; // 50 yards
+  const LANDMARK_CIRCLE_RADIUS_KM = 0.04572;
 
   function scoreGuess(guess, actualTarget){
     const geo = actualTarget.geometryJSON ? JSON.parse(actualTarget.geometryJSON) : null;
@@ -973,6 +1320,7 @@ const firebaseConfig = {
     map.fitBounds(bounds, { padding: 70, maxZoom: 12, duration: 800 });
   }
   function renderLeaderboard(sdoc, scores){
+    const showPoints = sdoc.mode !== 'custom';
     const ranked = sdoc.guessers
       .map((g, i) => ({ ...g, score: scores[i] }))
       .filter((g, i) => sdoc.guessers[i].guess)
@@ -982,8 +1330,13 @@ const firebaseConfig = {
     ranked.forEach((g, i) => {
       const row = document.createElement('div');
       row.className = 'lb-row' + (i === 0 ? ' first' : '');
-      const pts = pointsForScore(g.score);
-      const distText = g.score.inside ? `Inside — perfect! 🎯 (${pts} pts)` : `${fmtDist(g.score.km)} (${pts} pts)`;
+      let distText;
+      if (showPoints){
+        const pts = pointsForScore(g.score);
+        distText = g.score.inside ? `Inside — perfect! 🎯 (${pts} pts)` : `${fmtDist(g.score.km)} (${pts} pts)`;
+      } else {
+        distText = g.score.inside ? `Inside — perfect! 🎯` : fmtDist(g.score.km);
+      }
       row.innerHTML = `<span class="lb-rank">${i+1}</span><span class="lb-dot" style="background:${g.color}"></span><span class="lb-name">${g.name}</span><span class="lb-dist">${distText}</span>`;
       el.appendChild(row);
     });
@@ -1001,12 +1354,36 @@ const firebaseConfig = {
     });
   }
 
+  function renderTiebreakerResult(sdoc){
+    const el = document.getElementById('leaderboard');
+    el.innerHTML = '';
+    sdoc.tiebreakerPlayerIds.forEach((id) => {
+      const g = sdoc.guessers.find(x => x.clientId === id);
+      if (!g) return;
+      const timedOut = (sdoc.tiebreakerTimedOut || []).includes(id);
+      const isWinner = (sdoc.winners || []).includes(id);
+      const row = document.createElement('div');
+      row.className = 'lb-row' + (isWinner ? ' first' : '');
+      let statusText;
+      if (timedOut){
+        statusText = "Timed out";
+      } else {
+        const guess = (sdoc.tiebreakerGuesses || {})[id];
+        const score = guess ? scoreGuess(guess, sdoc.actual) : null;
+        statusText = score ? (score.inside ? 'Inside — perfect! 🎯' : fmtDist(score.km)) : '—';
+      }
+      row.innerHTML = `<span class="lb-dot" style="background:${g.color}"></span><span class="lb-name">${g.name}</span><span class="lb-dist">${statusText}${isWinner ? ' 🏆' : ''}</span>`;
+      el.appendChild(row);
+    });
+  }
+
   document.getElementById('again-btn').addEventListener('click', async () => {
     clearFinalizedLayer();
     map.jumpTo({ center: [0, 20], zoom: 1 });
     promptInput.value = '';
     isRandomPrompt = false;
     randomSearchQuery = '';
+    randomContinent = '';
     autoLocationSearchDone = false;
     updatePromptContinueState();
     await runOnSession(resetForNewRoundLogic, CLIENT_ID);
@@ -1027,8 +1404,16 @@ const firebaseConfig = {
     const myEntry = sdoc.guessers.find(g => g.clientId === CLIENT_ID);
 
     if (sdoc.stage === 'prompt'){
-      setLocalView(isHost ? 'prompt' : 'prompt-wait');
-      if (isHost) promptContinueBtn.textContent = 'Start next round';
+      const isPicker = sdoc.pickerClientId === CLIENT_ID;
+      setLocalView(isPicker ? 'prompt' : 'prompt-wait');
+      if (isPicker){
+        configurePromptPanelForMode(sdoc.mode, sdoc.actual === null);
+      } else {
+        const pickerEntry = sdoc.guessers.find(g => g.clientId === sdoc.pickerClientId);
+        document.getElementById('waiting-newprompt-hint').textContent = pickerEntry
+          ? `Waiting for ${pickerEntry.name} to pick this round's location...`
+          : 'Waiting for the next location to be picked...';
+      }
       return;
     }
 
@@ -1043,6 +1428,7 @@ const firebaseConfig = {
       });
       hostStartBtn.style.display = isHost ? 'block' : 'none';
       hostStartBtn.disabled = sdoc.guessers.length === 0;
+      document.getElementById('save-group-section').style.display = sdoc.mode === 'custom' ? 'none' : 'block';
       waitingHint.textContent = isHost
         ? (sdoc.guessers.length === 0 ? 'Waiting for players to join with the code above.' : `${sdoc.guessers.length} player(s) joined. Start whenever you're ready.`)
         : 'Waiting for the host to start the round.';
@@ -1051,15 +1437,36 @@ const firebaseConfig = {
     }
 
     if (sdoc.stage === 'guessing'){
+      if (sdoc.tiebreakerActive){
+        const tbCurrentId = sdoc.tiebreakerPlayerIds[sdoc.tiebreakerIdx];
+        const tbCurrentGuesser = sdoc.guessers.find(g => g.clientId === tbCurrentId);
+        const tbMyTurn = tbCurrentId === CLIENT_ID;
+        clueBtn.style.display = 'none';
+        if (tbMyTurn){
+          instructionText.innerHTML = '<span class="dot"></span>⚔️ TIEBREAKER — your turn! <span id="tb-timer" style="color:var(--gold);font-weight:700;"></span>';
+          lockBtn.disabled = !tempGuess;
+          setLocalView('guessing-mine');
+        } else {
+          instructionText.innerHTML = '<span class="dot"></span>⚔️ TIEBREAKER — waiting for ' + (tbCurrentGuesser ? tbCurrentGuesser.name : '...') + ' <span id="tb-timer" style="color:var(--gold);font-weight:700;"></span>';
+          clearTempMarker(); tempGuess = null;
+          setLocalView('guessing-theirs');
+        }
+        return;
+      }
       const current = sdoc.guessers[sdoc.currentIdx];
       const myTurn = current && current.clientId === CLIENT_ID;
       if (myTurn){
-        instructionText.innerHTML = '<span class="dot"></span>Your turn — tap the map to drop your pin';
+        const usedClue = !!current.usedClue;
+        const clueText = (usedClue && sdoc.promptContinent) ? ` <b style="color:var(--gold)">(Clue: ${sdoc.promptContinent})</b>` : '';
+        instructionText.innerHTML = '<span class="dot"></span>Your turn — tap the map to drop your pin' + clueText;
         lockBtn.disabled = !tempGuess;
+        clueBtn.style.display = (sdoc.mode === 'main' && !usedClue) ? 'inline-block' : 'none';
+        clueBtn.disabled = false;
         setLocalView('guessing-mine');
       } else {
         instructionText.innerHTML = '<span class="dot"></span>Waiting for ' + (current ? current.name : 'the next player') + ' to guess…';
         clearTempMarker(); tempGuess = null;
+        clueBtn.style.display = 'none';
         setLocalView('guessing-theirs');
       }
       return;
@@ -1076,12 +1483,45 @@ const firebaseConfig = {
     }
 
     if (sdoc.stage === 'revealed'){
+      const isCustom = sdoc.mode === 'custom';
+      const isTiebreakerResult = !!sdoc.tiebreakerResolved;
+      const isGameOver = !isCustom && sdoc.gameOver;
+      const isTiebreakerPending = !isCustom && sdoc.tiebreakerPending;
       document.getElementById('actual-name').textContent = sdoc.actual.name;
-      lastScores = sdoc.guessers.map(g => g.guess ? scoreGuess(g.guess, sdoc.actual) : null);
-      renderRevealMap(sdoc, lastScores);
-      renderLeaderboard(sdoc, lastScores);
-      renderTotalLeaderboard(sdoc);
-      document.getElementById('again-btn').style.display = isHost ? 'block' : 'none';
+
+      if (isTiebreakerResult){
+        renderTiebreakerResult(sdoc);
+        document.getElementById('total-points-section').style.display = 'none';
+      } else {
+        lastScores = sdoc.guessers.map(g => g.guess ? scoreGuess(g.guess, sdoc.actual) : null);
+        renderRevealMap(sdoc, lastScores);
+        renderLeaderboard(sdoc, lastScores);
+        document.getElementById('total-points-section').style.display = isCustom ? 'none' : 'block';
+        if (!isCustom) renderTotalLeaderboard(sdoc);
+      }
+
+      document.getElementById('gameover-banner').style.display = isGameOver ? 'block' : 'none';
+      if (isGameOver){
+        const winnerNames = sdoc.guessers.filter(g => (sdoc.winners || []).includes(g.clientId)).map(g => g.name);
+        const maxPts = Math.max(...sdoc.guessers.map(g => g.totalPoints || 0));
+        document.getElementById('gameover-text').textContent = winnerNames.length > 1
+          ? `${winnerNames.join(' & ')} tied at ${maxPts} points!`
+          : `${winnerNames[0]} wins with ${maxPts} points!`;
+      }
+
+      const tiebreakerPendingTextEl = document.getElementById('tiebreaker-pending-text');
+      tiebreakerPendingTextEl.style.display = isTiebreakerPending ? 'block' : 'none';
+      if (isTiebreakerPending){
+        const tiedNames = sdoc.guessers.filter(g => (sdoc.tiebreakerPlayerIds || []).includes(g.clientId)).map(g => g.name);
+        tiebreakerPendingTextEl.textContent = `Tie at ${GAME_OVER_THRESHOLD}+ between ${tiedNames.join(' & ')}! ` +
+          (isHost ? 'Start a tiebreaker round to decide the winner.' : 'Waiting for the host to start a tiebreaker round.');
+      }
+
+      document.getElementById('tiebreaker-btn').style.display = (isHost && isTiebreakerPending) ? 'block' : 'none';
+      document.getElementById('again-btn').style.display = (isHost && !isCustom && !isGameOver && !isTiebreakerPending) ? 'block' : 'none';
+      const leaveBtnEl = document.getElementById('leave-btn');
+      leaveBtnEl.textContent = (isCustom || isGameOver) ? 'Back to menu' : 'Leave game';
+      leaveBtnEl.className = (isCustom || isGameOver) ? 'btn full' : 'btn ghost';
       setLocalView('revealed');
       return;
     }
@@ -1097,7 +1537,6 @@ const firebaseConfig = {
 
   setLocalView('landing');
 
-  // if opened via a shared invite link (?join=CODE), jump straight into joining
   const urlParams = new URLSearchParams(window.location.search);
   const joinParam = urlParams.get('join');
   if (joinParam){
